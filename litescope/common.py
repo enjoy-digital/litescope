@@ -8,6 +8,15 @@ from migen.flow.plumbing import Buffer
 from migen.fhdl.specials import Memory
 
 
+@ResetInserter()
+@CEInserter()
+class Counter(Module):
+    def __init__(self, *args, increment=1, **kwargs):
+        self.value = Signal(*args, **kwargs)
+        self.width = flen(self.value)
+        self.sync += self.value.eq(self.value+increment)
+
+
 def data_layout(dw):
     return [("data", dw, DIR_M_TO_S)]
 
