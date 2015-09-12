@@ -68,26 +68,33 @@ if __name__ == "__main__":
     else:
         top_class = target_module.default_subtarget
 
-    if args.platform is None:
-        if hasattr(top_class, "default_platform"):
-            platform_name = top_class.default_platform
-        else:
-            raise ValueError("Target has no default platform, specify a platform with -p your_platform")
+    if hasattr(top_class, "platform"):
+        platform = top_class.platform
+        platform_name = top_class.platform.name
     else:
-        platform_name = args.platform
-    platform_module = _import("mibuild.platforms", platform_name)
-    platform_kwargs = dict((k, autotype(v)) for k, v in args.platform_option)
-    platform = platform_module.Platform(**platform_kwargs)
+        if args.platform is None:
+            if hasattr(top_class, "default_platform"):
+                platform_name = top_class.default_platform
+            else:
+                raise ValueError("Target has no default platform, specify a platform with -p your_platform")
+        else:
+            platform_name = args.platform
+        platform_module = _import("mibuild.platforms", platform_name)
+        platform_kwargs = dict((k, autotype(v)) for k, v in args.platform_option)
+        platform = platform_module.Platform(**platform_kwargs)
 
     build_name = top_class.__name__.lower() + "-" + platform_name
     top_kwargs = dict((k, autotype(v)) for k, v in args.target_option)
     soc = top_class(platform, **top_kwargs)
     soc.finalize()
-    memory_regions = soc.get_memory_regions()
-    csr_regions = soc.get_csr_regions()
+    try:
+        memory_regions = soc.get_memory_regions()
+        csr_regions = soc.get_csr_regions()
+    except:
+        pass
 
     # decode actions
-    action_list = ["clean", "build-csr-csv", "build-bitstream", "load-bitstream", "all"]
+    action_list = ["clean", "build-csr-csv", "build-core", "build-bitstream", "load-bitstream", "all"]
     actions = {k: False for k in action_list}
     for action in args.action:
         if action in actions:
@@ -108,11 +115,17 @@ if __name__ == "__main__":
    A small footprint and configurable embedded FPGA
        logic analyzer core powered by Migen
 
-====== Building parameters: ======
+====== Building parameters: ======""")
+if hasattr(soc, "io"):
+    print("""
 LiscopeIO
 ---------
 Width: {}
+""".format(soc.io.dw)
+)
 
+if hasattr(soc, "la"):
+    print("""
 LiscopeLA
 ---------
 Width: {}
@@ -120,7 +133,6 @@ Depth: {}
 Subsampler: {}
 RLE: {}
 ===============================""".format(
-    soc.io.dw,
     soc.la.dw,
     soc.la.depth,
     str(soc.la.with_subsampler),
@@ -143,6 +155,19 @@ RLE: {}
     if actions["build-csr-csv"]:
         csr_csv = cpuif.get_csr_csv(csr_regions)
         write_to_file(args.csr_csv, csr_csv)
+
+    if actions["build-core"]:
+        ios = soc.get_ios()
+        if not isinstance(soc, _Fragment):
+            soc = soc.get_fragment()
+        platform.finalize(soc)
+        so = {
+            NoRetiming:             XilinxNoRetiming,
+            MultiReg:               XilinxMultiReg,
+            AsyncResetSynchronizer: XilinxAsyncResetSynchronizer
+        }
+        v_output = verilog.convert(soc, ios, special_overrides=so)
+        v_output.write("build/litescope.v")
 
     if actions["build-bitstream"]:
         build_kwargs = dict((k, autotype(v)) for k, v in args.build_option)
