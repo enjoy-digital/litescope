@@ -136,8 +136,6 @@ RLE: {}
 
     if actions["build-bitstream"]:
         actions["build-csr-csv"] = True
-        actions["build-bitstream"] = True
-        actions["load-bitstream"] = True
 
     if actions["clean"]:
         subprocess.call(["rm", "-rf", "build/*"])
