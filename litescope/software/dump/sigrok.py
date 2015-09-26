@@ -9,10 +9,9 @@ from litescope.software.dump import *
 
 
 class SigrokDump(Dump):
-    def __init__(self, init_dump=None, samplerate=50000000):
+    def __init__(self, dump=None, samplerate=50000000):
         Dump.__init__(self)
-        if init_dump:
-            self.vars = init_dump.vars
+        self.variables = [] if dump is None else dump.variables
         self.samplerate = samplerate
 
     def write_version(self):
@@ -32,27 +31,27 @@ unitsize = 1
 total probes = {}
 samplerate = {} KHz
 """.format(
-        len(self.vars),
+        len(self.variables),
         self.samplerate//1000,
     )
-        for i, var in enumerate(self.vars):
-            r += "probe{} = {}\n".format(i+1, var.name)
+        for i, variable in enumerate(self.variables):
+            r += "probe{} = {}\n".format(i + 1, variable.name)
         f.write(r)
         f.close()
 
     def write_data(self):
         # XXX are probes limited to 1 bit?
-        data_bits = math.ceil(len(self.vars)/8)*8
+        data_bits = math.ceil(len(self.variables)/8)*8
         data_len = 0
-        for var in self.vars:
-            data_len = max(data_len, len(var))
+        for variable in self.variables:
+            data_len = max(data_len, len(variable))
         datas = []
         for i in range(data_len):
             data = 0
-            for j, var in enumerate(reversed(self.vars)):
+            for j, var in enumerate(reversed(self.variables)):
                 data = data << 1
                 try:
-                    data |= var.values[i] % 2
+                    data |= variable.values[i] % 2
                 except:
                     pass
             datas.append(data)
@@ -124,7 +123,7 @@ samplerate = {} KHz
         return datas
 
     def read(self, filename):
-        self.vars = []
+        self.variables = []
         name, ext = os.path.splitext(filename)
         self.unzip(filename, name)
         os.chdir(name)
@@ -137,14 +136,4 @@ samplerate = {} KHz
             probe_data = []
             for data in datas:
                 probe_data.append((data >> (v-1)) & 0x1)
-            self.add(Var(k, 1, probe_data))
-
-if __name__ == '__main__':
-    dump = SigrokDump()
-    dump.add(Var("foo1", 1, [0, 1, 0, 1, 0, 1]))
-    dump.add(Var("foo2", 2, [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]))
-    ramp = [i%128 for i in range(1024)]
-    dump.add(Var("ramp", 16, ramp))
-    dump.write("dump.sr")
-    dump.read("dump.sr")
-    dump.write("dump_copy.sr")
+            self.add(DumpVariable(k, 1, probe_data))

@@ -2,19 +2,18 @@ from litescope.software.dump import *
 
 
 class CSVDump(Dump):
-    def __init__(self, init_dump=None):
+    def __init__(self, dump=None):
         Dump.__init__(self)
-        if init_dump:
-            self.vars = init_dump.vars
+        self.variables = [] if dump is None else dump.variables
 
     def generate_vars(self):
         r = ""
-        for var in self.vars:
-            r += var.name
+        for variable in self.variables:
+            r += variable.name
             r += ","
         r += "\n"
-        for var in self.vars:
-            r += str(var.width)
+        for variable in self.variables:
+            r += str(variable.width)
             r += ","
         r += "\n"
         return r
@@ -22,15 +21,15 @@ class CSVDump(Dump):
     def generate_dumpvars(self):
         r  = ""
         for i in range(len(self)):
-            for var in self.vars:
+            for variable in self.variables:
                 try:
-                    var.val = var.values[i]
+                    variable.current_value = variable.values[i]
                 except:
                     pass
-                if var.val == "x":
+                if variable.current_value == "x":
                     r += "x"
                 else:
-                    r += dec2bin(var.val, var.width)
+                    r += dec2bin(variable.current_value, variable.width)
                 r += ", "
             r += "\n"
         return r
@@ -43,11 +42,3 @@ class CSVDump(Dump):
 
     def read(self, filename):
         raise NotImplementedError("CSV files can not (yet) be read, please contribute!")
-
-if __name__ == '__main__':
-    dump = CSVDump()
-    dump.add(Var("foo1", 1, [0, 1, 0, 1, 0, 1]))
-    dump.add(Var("foo2", 2, [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]))
-    ramp = [i%128 for i in range(1024)]
-    dump.add(Var("ramp", 16, ramp))
-    dump.write("dump.csv")

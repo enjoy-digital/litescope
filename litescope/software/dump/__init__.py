@@ -1,6 +1,6 @@
-def dec2bin(d, nb=0):
+def dec2bin(d, width=0):
     if d == "x":
-        return "x"*nb
+        return "x"*width
     elif d == 0:
         b = "0"
     else:
@@ -8,20 +8,20 @@ def dec2bin(d, nb=0):
         while d != 0:
             b = "01"[d&1] + b
             d = d >> 1
-    return b.zfill(nb)
+    return b.zfill(width)
 
 
 def get_bits(values, low, high=None):
     r = []
     if high is None:
-        high = low+1
+        high = low + 1
     for val in values:
-        t = (val >> low) & (2**(high-low)-1)
+        t = (val >> low) & (2**(high - low) - 1)
         r.append(t)
     return r
 
 
-class Dat(list):
+class DumpData(list):
     def __init__(self, width):
         self.width = width
 
@@ -46,11 +46,11 @@ class Dat(list):
             raise KeyError
 
     def decode_rle(self):
-        datas = Dat(self.width-1)
+        datas = DumpData(self.width - 1)
         last_data = 0
         for data in self:
-            rle = data >> (self.width-1)
-            data = data & (2**(self.width-1)-1)
+            rle = data >> (self.width - 1)
+            data = data & (2**(self.width - 1) - 1)
             if rle:
                 for i in range(data):
                     datas.append(last_data)
@@ -60,54 +60,31 @@ class Dat(list):
         return datas
 
 
-class Var:
-    def __init__(self, name, width, values=[], type="wire", default="x"):
-        self.type = type
+class DumpVariable:
+    def __init__(self, name, width, values=[]):
         self.width = width
         self.name = name
-        self.val = default
-        self.values = values
-        self.vcd_id = None
-
-    def set_vcd_id(self, s):
-        self.vcd_id = s
+        self.values = [int(v)%2**width for v in values]
 
     def __len__(self):
         return len(self.values)
 
-    def change(self, cnt):
-        r = ""
-        try:
-            if self.values[cnt+1] != self.val:
-                r += "b"
-                r += dec2bin(self.values[cnt+1], self.width)
-                r += " "
-                r += self.vcd_id
-                r += "\n"
-                return r
-        except:
-            return r
-        return r
-
 
 class Dump:
     def __init__(self):
-        self.vars = []
-        self.vcd_id = "!"
+        self.variables = []
 
-    def add(self, var):
-        var.set_vcd_id(self.vcd_id)
-        self.vcd_id = chr(ord(self.vcd_id)+1)
-        self.vars.append(var)
+    def add(self, variable):
+        self.variables.append(variable)
 
-    def add_from_layout(self, layout, var):
+    def add_from_layout(self, layout, variable):
         i = 0
         for s, n in layout:
-            self.add(Var(s, n, var[i:i+n]))
+            self.add(DumpVariable(s, n, variable[i:i+n]))
             i += n
 
     def __len__(self):
         l = 0
-        for var in self.vars:
-            l = max(len(var), l)
+        for variable in self.variables:
+            l = max(len(variable), l)
         return l

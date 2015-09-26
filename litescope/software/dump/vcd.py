@@ -3,10 +3,9 @@ from litescope.software.dump import *
 
 
 class VCDDump(Dump):
-    def __init__(self, init_dump=None, timescale="1ps", comment=""):
+    def __init__(self, dump=None, timescale="1ps", comment=""):
         Dump.__init__(self)
-        if init_dump:
-            self.vars = init_dump.vars
+        self.variables = [] if dump is None else dump.variables
         self.timescale = timescale
         self.comment = comment
         self.cnt = -1
@@ -14,8 +13,16 @@ class VCDDump(Dump):
     def change(self):
         r = ""
         c = ""
-        for var in self.vars:
-            c += var.change(self.cnt)
+        for v in self.variables:
+            try:
+                if v.values[self.cnt + 1] != v.current_value:
+                    c += "b"
+                    c += dec2bin(v.values[self.cnt + 1], v.width)
+                    c += " "
+                    c += v.vcd_id
+                    c += "\n"
+            except:
+                pass
         if c != "":
             r += "#"
             r += str(self.cnt+1)
@@ -58,15 +65,13 @@ class VCDDump(Dump):
 
     def generate_vars(self):
         r = ""
-        for var in self.vars:
-            r += "$var "
-            r += var.type
+        for v in self.variables:
+            r += "$var wire "
+            r += str(v.width)
             r += " "
-            r += str(var.width)
+            r += v.vcd_id
             r += " "
-            r += var.vcd_id
-            r += " "
-            r += var.name
+            r += v.name
             r += " $end\n"
         return r
 
@@ -82,11 +87,12 @@ class VCDDump(Dump):
 
     def generate_dumpvars(self):
         r = "$dumpvars\n"
-        for var in self.vars:
+        for v in self.variables:
+            v.current_value = "x"
             r += "b"
-            r += dec2bin(var.val, var.width)
+            r += dec2bin(v.current_value, v.width)
             r += " "
-            r += var.vcd_id
+            r += v.vcd_id
             r += "\n"
         r += "$end\n"
         return r
@@ -100,10 +106,16 @@ class VCDDump(Dump):
 
     def __repr__(self):
         r = ""
-
         return r
 
+    def finalize(self):
+        vcd_id = "!"
+        for v in self.variables:
+            v.vcd_id = vcd_id
+            vcd_id = chr(ord(vcd_id)+1)
+
     def write(self, filename):
+        self.finalize()
         f = open(filename, "w")
         f.write(self.generate_date())
         f.write(self.generate_comment())
@@ -118,11 +130,3 @@ class VCDDump(Dump):
 
     def read(self, filename):
         raise NotImplementedError("VCD files can not (yet) be read, please contribute!")
-
-if __name__ == '__main__':
-    dump = VCDDump()
-    dump.add(Var("foo1", 1, [0, 1, 0, 1, 0, 1]))
-    dump.add(Var("foo2", 2, [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]))
-    ramp = [i%128 for i in range(1024)]
-    dump.add(Var("ramp", 16, ramp))
-    dump.write("dump.vcd")
