@@ -4,23 +4,23 @@ from litescope.software.driver.logic_analyzer import LiteScopeLogicAnalyzerDrive
 def main(wb):
     wb.open()
     # # #
-    la = LiteScopeLogicAnalyzerDriver(wb.regs, "logic_analyzer", debug=True)
+    logic_analyzer = LiteScopeLogicAnalyzerDriver(wb.regs, "logic_analyzer", debug=True)
 
     cond = {} # immediate trigger
-    la.configure_term(port=0, cond=cond)
-    la.configure_sum("term")
-    la.configure_subsampler(1)
-    # la.configure_qualifier(1)
-    la.configure_rle(1)
-    la.run(offset=128, length=256)
+    logic_analyzer.configure_term(port=0, cond=cond)
+    logic_analyzer.configure_sum("term")
+    logic_analyzer.configure_subsampler(1)
+    # logic_analyzer.configure_qualifier(1)
+    logic_analyzer.configure_rle(1)
+    logic_analyzer.run(offset=128, length=256)
 
-    while not la.done():
+    while not logic_analyzer.done():
         pass
-    la.upload()
+    logic_analyzer.upload()
 
-    la.save("dump.vcd")
-    la.save("dump.csv")
-    la.save("dump.py")
-    la.save("dump.sr")
+    logic_analyzer.save("dump.vcd")
+    logic_analyzer.save("dump.csv")
+    logic_analyzer.save("dump.py")
+    logic_analyzer.save("dump.sr")
     # # #
     wb.close()
