@@ -5,7 +5,7 @@ import zipfile
 import re
 from collections import OrderedDict
 
-from litescope.software.dump import *
+from litescope.software.dump.common import Dump, DumpVariable
 
 
 class SigrokDump(Dump):

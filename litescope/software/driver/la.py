@@ -125,16 +125,12 @@ class LiteScopeLADriver():
             print("saving to " + filename)
         name, ext = os.path.splitext(filename)
         if ext == ".vcd":
-            from litescope.software.dump.vcd import VCDDump
             dump = VCDDump()
         elif ext == ".csv":
-            from litescope.software.dump.csv import CSVDump
             dump = CSVDump()
         elif ext == ".py":
-            from litescope.software.dump.python import PythonDump
             dump = PythonDump()
         elif ext == ".sr":
-            from litescope.software.dump.sigrok import SigrokDump
             if self.samplerate is None:
                 raise ValueError("Unable to automatically retrieve clk_freq, clk_freq parameter required")
             dump = SigrokDump(samplerate=self.samplerate)

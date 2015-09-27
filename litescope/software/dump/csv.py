@@ -1,4 +1,4 @@
-from litescope.software.dump import *
+from litescope.software.dump.common import Dump, dec2bin
 
 
 class CSVDump(Dump):
