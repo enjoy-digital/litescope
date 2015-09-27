@@ -1,9 +1,9 @@
-import csv
 from struct import *
 from migen.fhdl.structure import *
 from litescope.software.dump import *
 from litescope.software.driver.truthtable import *
 
+import csv
 
 class LiteScopeLADriver():
     def __init__(self, regs, name, config_csv=None, clk_freq=None, debug=False):
@@ -24,7 +24,7 @@ class LiteScopeLADriver():
         self.get_config()
         self.get_layout()
         self.build()
-        self.data = Dat(self.dw)
+        self.data = DumpData(self.dw)
 
     def get_config(self):
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
