@@ -1,7 +1,7 @@
 from litescope.common import *
 
 
-class LiteScopeIO(Module, AutoCSR):
+class LiteScopeInOut(Module, AutoCSR):
     def __init__(self, dw):
         self.dw = dw
         self._input = CSRStatus(dw)

@@ -1,3 +1,4 @@
+from migen.fhdl.std import *
 from migen.genlib.io import CRG
 from migen.genlib.resetsync import AsyncResetSynchronizer
 
@@ -7,10 +8,10 @@ from mibuild.xilinx.platform import XilinxPlatform
 from targets import *
 
 from misoclib.soc import SoC
-from litescope.common import *
+
 from litescope.core.port import LiteScopeTerm
-from litescope.frontend.io import LiteScopeIO
-from litescope.frontend.la import LiteScopeLA
+from litescope.frontend.inout import LiteScopeInOut
+from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
 
 _io = [
@@ -38,7 +39,7 @@ class CorePlatform(XilinxPlatform):
 class Core(SoC):
     platform = CorePlatform()
     csr_map = {
-        "la":    16
+        "logic_analyzer":    16
     }
     csr_map.update(SoC.csr_map)
 
@@ -56,8 +57,8 @@ class Core(SoC):
         self.add_wb_master(self.cpu_or_bridge.wishbone)
 
         self.bus = platform.request("bus")
-        self.submodules.la = LiteScopeLA((self.bus), 512, with_rle=True, with_subsampler=True)
-        self.la.trigger.add_port(LiteScopeTerm(self.la.dw))
+        self.submodules.logic_analyzer = LiteScopeLogicAnalyzer((self.bus), 512, with_rle=True, with_subsampler=True)
+        self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
 
     def get_ios(self):
         ios = set()

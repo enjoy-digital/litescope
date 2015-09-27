@@ -1,17 +1,18 @@
 from migen.genlib.io import CRG
 
 from misoclib.soc import SoC
+
 from litescope.common import *
 from litescope.core.port import LiteScopeTerm
-from litescope.frontend.io import LiteScopeIO
-from litescope.frontend.la import LiteScopeLA
+from litescope.frontend.inout import LiteScopeInOut
+from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
 from misoclib.com.uart.bridge import UARTWishboneBridge
 
 class LiteScopeSoC(SoC):
     csr_map = {
-        "io":    16,
-        "la":    17
+        "inout" :          16,
+        "logic_analyzer" : 17
     }
     csr_map.update(SoC.csr_map)
 
@@ -28,10 +29,10 @@ class LiteScopeSoC(SoC):
         self.add_wb_master(self.cpu_or_bridge.wishbone)
         self.submodules.crg = CRG(platform.request(platform.default_clk_name))
 
-        self.submodules.io = LiteScopeIO(8)
+        self.submodules.inout = LiteScopeInOut(8)
         for i in range(8):
             try:
-                self.comb += platform.request("user_led", i).eq(self.io.o[i])
+                self.comb += platform.request("user_led", i).eq(self.inout.o[i])
             except:
                 pass
 
@@ -48,10 +49,10 @@ class LiteScopeSoC(SoC):
         self.debug = (
             counter1.value
         )
-        self.submodules.la = LiteScopeLA(self.debug, 512, with_rle=True, with_subsampler=True)
-        self.la.trigger.add_port(LiteScopeTerm(self.la.dw))
+        self.submodules.logic_analyzer = LiteScopeLogicAnalyzer(self.debug, 512, with_rle=True, with_subsampler=True)
+        self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
 
     def do_exit(self, vns):
-        self.la.export(vns, "test/la.csv")
+        self.logic_analyzer.export(vns, "test/logic_analyzer.csv")
 
 default_subtarget = LiteScopeSoC

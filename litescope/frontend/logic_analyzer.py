@@ -5,7 +5,7 @@ from litescope.core.storage import LiteScopeSubSampler, LiteScopeRecorder, LiteS
 from mibuild.tools import write_to_file
 
 
-class LiteScopeLA(Module, AutoCSR):
+class LiteScopeLogicAnalyzer(Module, AutoCSR):
     def __init__(self, layout, depth, clk_domain="sys",
             with_input_buffer=False,
             with_rle=False, rle_length=256,

@@ -116,15 +116,15 @@ if __name__ == "__main__":
        logic analyzer core powered by Migen
 
 ====== Building parameters: ======""")
-if hasattr(soc, "io"):
+if hasattr(soc, "inout"):
     print("""
 LiscopeIO
 ---------
 Width: {}
-""".format(soc.io.dw)
+""".format(soc.inout.dw)
 )
 
-if hasattr(soc, "la"):
+if hasattr(soc, "logic_analyzer"):
     print("""
 LiscopeLA
 ---------
@@ -133,10 +133,10 @@ Depth: {}
 Subsampler: {}
 RLE: {}
 ===============================""".format(
-    soc.la.dw,
-    soc.la.depth,
-    str(soc.la.with_subsampler),
-    str(soc.la.with_rle)
+    soc.logic_analyzer.dw,
+    soc.logic_analyzer.depth,
+    str(soc.logic_analyzer.with_subsampler),
+    str(soc.logic_analyzer.with_rle)
     )
 )
 

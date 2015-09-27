@@ -5,7 +5,7 @@ from litescope.software.driver.truthtable import *
 
 import csv
 
-class LiteScopeLADriver():
+class LiteScopeLogicAnalyzerDriver():
     def __init__(self, regs, name, config_csv=None, clk_freq=None, debug=False):
         self.regs = regs
         self.name = name

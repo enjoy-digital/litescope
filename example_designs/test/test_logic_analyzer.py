@@ -1,13 +1,12 @@
-from litescope.software.driver.la import LiteScopeLADriver
+from litescope.software.driver.logic_analyzer import LiteScopeLogicAnalyzerDriver
 
 
 def main(wb):
     wb.open()
     # # #
-    la = LiteScopeLADriver(wb.regs, "la", debug=True)
+    la = LiteScopeLogicAnalyzerDriver(wb.regs, "logic_analyzer", debug=True)
 
-    # cond = {"cnt0"    :    128} # trigger on cnt0 = 128
-    cond = {}  # trigger on cnt0 = 128
+    cond = {} # immediate trigger
     la.configure_term(port=0, cond=cond)
     la.configure_sum("term")
     la.configure_subsampler(1)
