@@ -14,3 +14,6 @@ test_logic_analyzer:
 	$(CMD) test_logic_analyzer
 
 all: test_regs test_inout test_logic_analyzer
+
+clean:
+	rm -f *.csv dump.*
