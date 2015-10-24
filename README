@@ -9,7 +9,7 @@
             logic analyzer core powered by Migen
 
 [> Doc
----------
+-------
 HTML : www.enjoy-digital.fr/litescope/
 PDF  : www.enjoy-digital.fr/litescope.pdf
 
@@ -19,9 +19,9 @@ LiteScope is a small footprint and configurable embedded logic analyzer that you
 can use in your FPGA and aims to provide a free, portable and flexible
 alternative to vendor's solutions!
 
-LiteScope is part of MiSoC libraries whose aims are to lower entry level of complex
-FPGA cores by providing simple, elegant and efficient implementations of
-components used in today's SoC such as Ethernet, SATA, PCIe, SDRAM Controller...
+LiteScope is part of EnjoyDigital's libraries whose aims are to lower entry level of
+complex FPGA cores by providing simple, elegant and efficient implementations
+ofcomponents used in today's SoC such as Ethernet, SATA, PCIe, SDRAM Controller...
 
 The core uses simple and specific streaming buses and will provides in the future
 adapters to use standardized AXI or Avalon-ST streaming buses.
@@ -32,20 +32,14 @@ configurable.
 LiteScope uses technologies developed in partnership with M-Labs Ltd:
  - Migen enables generating HDL with Python in an efficient way.
  - MiSoC provides the basic blocks to build a powerful and small footprint SoC.
-
-LiteScope can be used as a Migen/MiSoC library (by simply installing  it
-with the provided setup.py) or can be integrated with your standard design flow
-by generating the verilog rtl that you will use as a standard core.
-
-LiteScope handles various export formats: .vcd, .sr(sigrok), .csv, .py...
-
-Since LiteScope also provides a UART <--> Wishbone brige so you only need 2
-external Rx/Tx pins to be ready to debug or control all your Wishbone peripherals!
+ 
+LiteScope can be used as MiSoC library or can be integrated with your standard
+design flow by generating the verilog rtl that you will use as a standard core.
 
 [> Features
------------
-- IO peek and poke with LiteScopeIO
-- Logic analyser with LiteScopeLA:
+------------
+- IO peek and poke with LiteScopeInOut
+- Logic analyser with LiteScopeLogicAnalyzer:
   - Various triggering modules: Term, Range, Edge (add yours! :)
   - Run Length Encoder to "compress" data and increase recording depth
   - Subsampling
@@ -55,6 +49,11 @@ external Rx/Tx pins to be ready to debug or control all your Wishbone peripheral
   - UART2Wishbone (provided by LiteScope)
   - Ethernet2Wishbone ("Etherbone") (when used with LiteEth)
   - PCIe2Wishbone (when used with LitePCIe)
+- Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
+
+[> Proven
+----------
+LiteScope has already been used to investigate issues on commercial and open-source designs.
 
 [> Possible improvements
 -------------------------
@@ -62,7 +61,7 @@ external Rx/Tx pins to be ready to debug or control all your Wishbone peripheral
 - add protocols analyzers
 - add signals injection/generation
 - add storage in DRAM
-- add storage in HDD with LiteSATA core (to be released soon!)
+- add storage in HDD with LiteSATA core
 - ... See below Support and consulting :)
 
 If you want to support these features, please contact us at florent [AT]
@@ -71,7 +70,7 @@ devel [AT] lists.m-labs.hk.
 
 
 [> Getting started
-------------------
+-------------------
 1. Install Python3 and your vendor's software
 
 2. Obtain Migen and install it:
@@ -83,16 +82,13 @@ devel [AT] lists.m-labs.hk.
 3. Obtain MiSoC:
   git clone https://github.com/m-labs/misoc --recursive
 
-4. Obtain LiteScope:
-  git clone https://github.com/enjoy-digital/litescope
-
-5. Build and load test design:
+4. Build and load test design:
   go to example_designs/
   ./make.py -p [your_platform] all load-bitstream
   Supported platforms are the ones already supported by Mibuild:
   de0nano, m1, mixxeo, kc705, zedboard...
 
-6. Test design:
+5. Test design:
   go to test and run:
   ./make.py --port your_serial_port test_inout (will blink leds)
   ./make.py --port your_serial_port test_logic_analyzer (will capture counter)
@@ -100,16 +96,18 @@ devel [AT] lists.m-labs.hk.
   tests can also be executed over Etherbone (provided with LiteEth):
   ./make.py --ip_address fpga_ip_address your_test
 
-[> Simulations:
-  XXX convert simulations
+[> Simulations
+---------------
+TODO
 
-[> Tests :
-  XXX convert tests
+[> Tests
+---------
+TODO
 
 [> License
------------
-LiteScope is released under the very permissive two-clause BSD license. Under the
-terms of this license, you are authorized to use LiteScope for closed-source
+------------
+LiteScope is released under the very permissive two-clause BSD license. Under
+the terms of this license, you are authorized to use LiteScope for closed-source
 proprietary designs.
 Even though we do not require you to do so, those things are awesome, so please
 do them if possible:
