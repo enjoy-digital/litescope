@@ -32,7 +32,7 @@ configurable.
 LiteScope uses technologies developed in partnership with M-Labs Ltd:
  - Migen enables generating HDL with Python in an efficient way.
  - MiSoC provides the basic blocks to build a powerful and small footprint SoC.
- 
+
 LiteScope can be used as MiSoC library or can be integrated with your standard
 design flow by generating the verilog rtl that you will use as a standard core.
 
@@ -74,13 +74,13 @@ devel [AT] lists.m-labs.hk.
 1. Install Python3 and your vendor's software
 
 2. Obtain Migen and install it:
-  git clone https://github.com/m-labs/migen
+  git clone https://github.com/enjoy-digital/migen
   cd migen
   python3 setup.py install
   cd ..
 
 3. Obtain MiSoC:
-  git clone https://github.com/m-labs/misoc --recursive
+  git clone https://github.com/enjoy-digital/misoc --recursive
 
 4. Build and load test design:
   go to example_designs/
