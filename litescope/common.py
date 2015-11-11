@@ -1,11 +1,9 @@
-from migen.fhdl.std import *
-from migen.bank.description import *
+from migen import *
 from migen.genlib.fsm import FSM, NextState
-from migen.flow.actor import *
-from migen.genlib.misc import Counter
-from migen.actorlib.fifo import AsyncFIFO, SyncFIFO
-from migen.flow.plumbing import Buffer
 from migen.fhdl.specials import Memory
+
+from litex.soc.interconnect.csr import *
+from litex.soc.interconnect.stream import *
 
 
 @ResetInserter()
@@ -13,7 +11,7 @@ from migen.fhdl.specials import Memory
 class Counter(Module):
     def __init__(self, *args, increment=1, **kwargs):
         self.value = Signal(*args, **kwargs)
-        self.width = flen(self.value)
+        self.width = len(self.value)
         self.sync += self.value.eq(self.value+increment)
 
 

@@ -1,28 +1,27 @@
 from migen.genlib.io import CRG
 
-from misoclib.soc import SoC
-
 from litescope.common import *
 from litescope.core.port import LiteScopeTerm
 from litescope.frontend.inout import LiteScopeInOut
 from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
-from misoclib.com.uart.bridge import UARTWishboneBridge
+from litex.soc.integration.soc_core import SoCCore
+from litex.soc.cores.uart.bridge import UARTWishboneBridge
 
-class LiteScopeSoC(SoC):
+class LiteScopeSoC(SoCCore):
     csr_map = {
         "inout" :          16,
         "logic_analyzer" : 17
     }
-    csr_map.update(SoC.csr_map)
+    csr_map.update(SoCCore.csr_map)
 
     def __init__(self, platform):
         clk_freq = int((1/(platform.default_clk_period))*1000000000)
-        SoC.__init__(self, platform, clk_freq,
-            cpu_type="none",
-            with_csr=True, csr_data_width=32,
+        SoCCore.__init__(self, platform, clk_freq,
+            cpu_type=None,
+            csr_data_width=32,
             with_uart=False,
-            with_identifier=True,
+            ident="Litescope example design",
             with_timer=False
         )
         self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))

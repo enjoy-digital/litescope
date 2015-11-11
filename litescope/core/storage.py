@@ -1,5 +1,4 @@
 from litescope.common import *
-from migen.flow.plumbing import Buffer
 
 
 class LiteScopeSubSamplerUnit(Module):
@@ -73,7 +72,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
                 NextState("BYPASS")
             ).Elif(change | counter_done,
                 source.stb.eq(1),
-                source.data[:flen(counter.value)].eq(counter.value),
+                source.data[:len(counter.value)].eq(counter.value),
                 source.data[-1].eq(1),  # Set RLE bit
                 buf.q.ack.eq(source.ack),
                 If(source.ack,
@@ -113,7 +112,7 @@ class LiteScopeRecorderUnit(Module):
 
         # # #
 
-        fifo = InsertReset(SyncFIFO(data_layout(dw), depth, buffered=True))
+        fifo = ResetInserter()(SyncFIFO(data_layout(dw), depth, buffered=True))
         self.submodules += fifo
 
         fsm = FSM(reset_state="IDLE")

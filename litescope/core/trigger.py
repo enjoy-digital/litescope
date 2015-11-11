@@ -1,4 +1,6 @@
 from litescope.common import *
+from functools import reduce
+from operator import and_
 
 
 class LiteScopeSumUnit(Module, AutoCSR):
@@ -30,7 +32,7 @@ class LiteScopeSumUnit(Module, AutoCSR):
 
         # drive source
         self.comb += [
-            source.stb.eq(optree("&", [sink.stb for sink in sinks])),
+            source.stb.eq(reduce(and_, [sink.stb for sink in sinks])),
             source.hit.eq(lut.dat_r)
         ]
         for i, sink in enumerate(sinks):

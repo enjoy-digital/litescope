@@ -1,13 +1,13 @@
-from migen.fhdl.std import *
+from migen import *
 from migen.genlib.io import CRG
-from migen.genlib.resetsync import AsyncResetSynchronizer
-
-from mibuild.generic_platform import *
-from mibuild.xilinx.platform import XilinxPlatform
 
 from targets import *
 
-from misoclib.soc import SoC
+from litex.build.generic_platform import *
+from litex.build.xilinx.platform import XilinxPlatform
+
+from litex.soc.integration.soc_core import SoCCore
+from litex.soc.cores.uart.bridge import UARTWishboneBridge
 
 from litescope.core.port import LiteScopeTerm
 from litescope.frontend.inout import LiteScopeInOut
@@ -24,8 +24,6 @@ _io = [
     ("bus", 0, Pins(" ".join(["X" for i in range(128)])))
 ]
 
-from misoclib.com.uart.bridge import UARTWishboneBridge
-
 class CorePlatform(XilinxPlatform):
     name = "core"
     default_clk_name = "sys_clk"
@@ -36,21 +34,21 @@ class CorePlatform(XilinxPlatform):
         pass
 
 
-class Core(SoC):
+class Core(SoCCore):
     platform = CorePlatform()
     csr_map = {
         "logic_analyzer":    16
     }
-    csr_map.update(SoC.csr_map)
+    csr_map.update(SoCCore.csr_map)
 
     def __init__(self, platform, clk_freq=100*1000000):
         self.clk_freq = clk_freq
         self.clock_domains.cd_sys = ClockDomain("sys")
-        SoC.__init__(self, platform, clk_freq,
-            cpu_type="none",
-            with_csr=True, csr_data_width=32,
+        SoCCore.__init__(self, platform, clk_freq,
+            cpu_type=None,
+            csr_data_width=32,
             with_uart=False,
-            with_identifier=True,
+            ident="Litescope example design",
             with_timer=False
         )
         self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))

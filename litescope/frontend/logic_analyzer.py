@@ -2,7 +2,7 @@ from litescope.common import *
 from litescope.core.trigger import LiteScopeTrigger
 from litescope.core.storage import LiteScopeSubSampler, LiteScopeRecorder, LiteScopeRunLengthEncoder
 
-from mibuild.tools import write_to_file
+from litex.build.tools import write_to_file
 
 
 class LiteScopeLogicAnalyzer(Module, AutoCSR):
@@ -12,7 +12,7 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
             with_subsampler=False):
         self.layout = layout
         self.data = Cat(*layout)
-        self.dw = flen(self.data)
+        self.dw = len(self.data)
         if with_rle:
             self.dw = max(self.dw, log2_int(rle_length))
             self.dw += 1
@@ -91,5 +91,5 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
         if not isinstance(self.layout, tuple):
             self.layout = [self.layout]
         for e in self.layout:
-            r += format_line("layout", vns.get_name(e), str(flen(e)))
+            r += format_line("layout", vns.get_name(e), str(len(e)))
         write_to_file(filename, r)
