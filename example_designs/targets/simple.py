@@ -1,4 +1,4 @@
-from migen.genlib.io import CRG
+from litex.gen.genlib.io import CRG
 
 from litescope.common import *
 from litescope.core.port import LiteScopeTerm

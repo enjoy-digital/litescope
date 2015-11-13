@@ -1,5 +1,5 @@
 from struct import *
-from migen.fhdl.structure import *
+from litex.gen.fhdl.structure import *
 from litescope.software.dump import *
 from litescope.software.driver.truthtable import *
 
