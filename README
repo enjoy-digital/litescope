@@ -8,11 +8,6 @@
        A small footprint and configurable embedded FPGA
             logic analyzer core powered by Migen
 
-[> Doc
--------
-HTML : www.enjoy-digital.fr/litescope/
-PDF  : www.enjoy-digital.fr/litescope.pdf
-
 [> Intro
 ---------
 LiteScope is a small footprint and configurable embedded logic analyzer that you
