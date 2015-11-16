@@ -134,7 +134,7 @@ class LiteScopeRecorderUnit(Module):
             fifo.sink.data.eq(data_sink.data),
             data_sink.ack.eq(fifo.sink.ack),
 
-            fifo.source.ack.eq(fifo.fifo.level >= self.offset),
+            fifo.source.ack.eq(fifo.level >= self.offset),
             If(trigger_sink.stb & trigger_sink.hit,
                 NextState("POST_HIT_RECORDING")
             )
@@ -151,7 +151,7 @@ class LiteScopeRecorderUnit(Module):
             fifo.sink.data.eq(data_sink.data),
             data_sink.ack.eq(fifo.sink.ack),
 
-            If(~fifo.sink.ack | (fifo.fifo.level >= self.length),
+            If(~fifo.sink.ack | (fifo.level >= self.length),
                 NextState("IDLE")
             )
         )
