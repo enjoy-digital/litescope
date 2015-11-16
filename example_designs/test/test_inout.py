@@ -1,4 +1,5 @@
 import time
+from litex.soc.tools.remote import RemoteClient
 from litescope.software.driver.inout import LiteScopeInOutDriver
 
 
@@ -25,13 +26,17 @@ def led_anim1(inout):
             time.sleep(i*i*0.0020)
             led_data = (led_data >> 1)
 
+wb = RemoteClient()
+wb.open()
 
-def main(wb):
-    inout = LiteScopeInOutDriver(wb.regs, "inout")
-    wb.open()
-    # # #
-    led_anim0(inout)
-    led_anim1(inout)
-    print("{:02X}".format(inout.read()))
-    # # #
-    wb.close()
+# # #
+
+inout = LiteScopeInOutDriver(wb.regs, "inout")
+
+led_anim0(inout)
+led_anim1(inout)
+print("{:02X}".format(inout.read()))
+
+# # #
+
+wb.close()
