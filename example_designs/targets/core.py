@@ -15,13 +15,13 @@ from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
 
 _io = [
-    ("sys_clk", 0, Pins("X")),
-    ("sys_rst", 1, Pins("X")),
+    ("sys_clk", 0, Pins(1)),
+    ("sys_rst", 1, Pins(1)),
     ("serial", 0,
-        Subsignal("tx", Pins("X")),
-        Subsignal("rx", Pins("X")),
+        Subsignal("tx", Pins(1)),
+        Subsignal("rx", Pins(1)),
     ),
-    ("bus", 0, Pins(" ".join(["X" for i in range(128)])))
+    ("bus", 0, Pins(128))
 ]
 
 class CorePlatform(XilinxPlatform):
