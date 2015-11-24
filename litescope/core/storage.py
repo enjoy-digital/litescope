@@ -9,14 +9,24 @@ class LiteScopeSubSamplerUnit(Module):
 
         # # #
 
-        self.submodules.counter = Counter(32)
+        counter = Signal(32)
+        counter_reset = Signal()
+        counter_ce = Signal()
+        self.sync += \
+            If(counter_reset,
+                counter.eq(0)
+            ).Elif(counter_ce,
+                counter.eq(counter + 1)
+            )
+
+
         done = Signal()
         self.comb += [
-            done.eq(self.counter.value >= self.value),
+            done.eq(self.counter >= self.value),
             Record.connect(sink, source),
             source.stb.eq(sink.stb & done),
-            self.counter.ce.eq(source.ack),
-            self.counter.reset.eq(source.stb & source.ack & done)
+            self.counter_ce.eq(source.ack),
+            self.counter_reset.eq(source.stb & source.ack & done)
         ]
 
 
@@ -45,9 +55,17 @@ class LiteScopeRunLengthEncoderUnit(Module):
         self.submodules.buf = buf = Buffer(sink.description)
         self.comb += Record.connect(sink, buf.d)
 
-        self.submodules.counter = counter = Counter(max=length)
+        counter = Signals(max=length)
+        counter_reset = Signal()
+        counter_ce = Signal()
         counter_done = Signal()
-        self.comb += counter_done.eq(counter.value == length-1)
+        self.sync += \
+            If(counter_reset,
+                counter.eq(0)
+            ).Elif(counter_ce,
+                counter.eq(counter + 1)
+            )
+        self.comb += counter_done.eq(counter == length - 1)
 
         change = Signal()
         self.comb += change.eq(
@@ -58,7 +76,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
         self.submodules.fsm = fsm = FSM(reset_state="BYPASS")
         fsm.act("BYPASS",
             Record.connect(buf.q, source),
-            counter.reset.eq(1),
+            counter_reset.eq(1),
             If(sink.stb & ~change,
                 If(self.enable,
                     NextState("COUNT")
@@ -67,12 +85,12 @@ class LiteScopeRunLengthEncoderUnit(Module):
         )
         fsm.act("COUNT",
             buf.q.ack.eq(1),
-            counter.ce.eq(sink.stb),
+            counter_ce.eq(sink.stb),
             If(~self.enable,
                 NextState("BYPASS")
             ).Elif(change | counter_done,
                 source.stb.eq(1),
-                source.data[:len(counter.value)].eq(counter.value),
+                source.data[:len(counter)].eq(counter),
                 source.data[-1].eq(1),  # Set RLE bit
                 buf.q.ack.eq(source.ack),
                 If(source.ack,

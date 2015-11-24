@@ -1,6 +1,7 @@
-from litescope.common import *
 from functools import reduce
 from operator import and_
+
+from litescope.common import *
 
 
 class LiteScopeSumUnit(Module, AutoCSR):

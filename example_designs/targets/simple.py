@@ -35,19 +35,10 @@ class LiteScopeSoC(SoCCore):
             except:
                 pass
 
-        self.submodules.counter0 = counter0 = Counter(8)
-        self.submodules.counter1 = counter1 = Counter(8)
-        self.comb += [
-            counter0.ce.eq(1),
-            If(counter0.value == 16,
-                counter0.reset.eq(1),
-                counter1.ce.eq(1)
-            )
-        ]
+        counter = Signal(16)
+        self.sync += counter.eq(counter + 1)
 
-        self.debug = (
-            counter1.value
-        )
+        self.debug = (counter)
         self.submodules.logic_analyzer = LiteScopeLogicAnalyzer(self.debug, 512, with_rle=True, with_subsampler=True)
         self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
 
