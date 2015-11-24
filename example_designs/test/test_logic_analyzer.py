@@ -1,4 +1,5 @@
 from litex.soc.tools.remote import RemoteClient
+from litescope.software.driver.logic_analyzer import LiteScopeLogicAnalyzerDriver
 
 wb = RemoteClient()
 wb.open()
