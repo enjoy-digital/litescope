@@ -15,8 +15,8 @@ from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
 
 _io = [
-    ("sys_clk", 0, Pins(1)),
-    ("sys_rst", 1, Pins(1)),
+    ("sys_clock", 0, Pins(1)),
+    ("sys_reset", 1, Pins(1)),
     ("serial", 0,
         Subsignal("tx", Pins(1)),
         Subsignal("rx", Pins(1)),
@@ -42,8 +42,11 @@ class Core(SoCCore):
     csr_map.update(SoCCore.csr_map)
 
     def __init__(self, platform, clk_freq=100*1000000):
-        self.clk_freq = clk_freq
         self.clock_domains.cd_sys = ClockDomain("sys")
+        self.comb += [
+            self.cd_sys.clk.eq(platform.request("sys_clock")),
+            self.cd_sys.rst.eq(platform.request("sys_reset"))
+        ]
         SoCCore.__init__(self, platform, clk_freq,
             cpu_type=None,
             csr_data_width=32,
@@ -57,14 +60,5 @@ class Core(SoCCore):
         self.bus = platform.request("bus")
         self.submodules.logic_analyzer = LiteScopeLogicAnalyzer((self.bus), 512, with_rle=True, with_subsampler=True)
         self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
-
-    def get_ios(self):
-        ios = set()
-        ios = ios.union({self.cd_sys.clk,
-                         self.cd_sys.rst})
-        ios = ios.union({self.platform.lookup_request("serial").rx,
-                         self.platform.lookup_request("serial").tx})
-        ios = ios.union({self.bus})
-        return ios
 
 default_subtarget = Core
