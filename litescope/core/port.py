@@ -78,7 +78,7 @@ class LiteScopeEdgeDetectorUnit(Module):
         # # #
 
         self.submodules.buffer = Buffer(self.sink.description)
-        self.comb += Record.connect(self.sink, self.buffer.d)
+        self.comb += self.sink.connect(self.buffer.d)
 
         rising = Signal(dw)
         self.comb += rising.eq(self.rising_mask & sink.data & ~self.buffer.q.data)

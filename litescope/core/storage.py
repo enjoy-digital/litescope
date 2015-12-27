@@ -23,7 +23,7 @@ class LiteScopeSubSamplerUnit(Module):
         done = Signal()
         self.comb += [
             done.eq(self.counter >= self.value),
-            Record.connect(sink, source),
+            sink.connect(source),
             source.stb.eq(sink.stb & done),
             self.counter_ce.eq(source.ack),
             self.counter_reset.eq(source.stb & source.ack & done)
@@ -53,7 +53,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
         # # #
 
         self.submodules.buf = buf = Buffer(sink.description)
-        self.comb += Record.connect(sink, buf.d)
+        self.comb += sink.connect(buf.sink)
 
         counter = Signals(max=length)
         counter_reset = Signal()
@@ -70,12 +70,12 @@ class LiteScopeRunLengthEncoderUnit(Module):
         change = Signal()
         self.comb += change.eq(
             sink.stb &
-            (sink.data != buf.q.data)
+            (sink.data != buf.source.data)
         )
 
         self.submodules.fsm = fsm = FSM(reset_state="BYPASS")
         fsm.act("BYPASS",
-            Record.connect(buf.q, source),
+            buf.source.connect(source),
             counter_reset.eq(1),
             If(sink.stb & ~change,
                 If(self.enable,
@@ -84,7 +84,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
             )
         )
         fsm.act("COUNT",
-            buf.q.ack.eq(1),
+            buf.source.ack.eq(1),
             counter_ce.eq(sink.stb),
             If(~self.enable,
                 NextState("BYPASS")
@@ -92,7 +92,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
                 source.stb.eq(1),
                 source.data[:len(counter)].eq(counter),
                 source.data[-1].eq(1),  # Set RLE bit
-                buf.q.ack.eq(source.ack),
+                buf.source.ack.eq(source.ack),
                 If(source.ack,
                     NextState("BYPASS")
                 )

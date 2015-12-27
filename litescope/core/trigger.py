@@ -75,6 +75,6 @@ class LiteScopeTrigger(Module, AutoCSR):
                 port.sink.stb.eq(self.sink.stb),
                 port.sink.data.eq(self.sink.data),
                 self.sink.ack.eq(1),
-                Record.connect(port.source, self.sum.sinks[i])
+                port.source.connect(self.sum.sinks[i])
             ]
-        self.comb += Record.connect(self.sum.source, self.source)
+        self.comb += self.sum.source.connect(self.source)

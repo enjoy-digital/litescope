@@ -41,8 +41,8 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
                 self.submodules += RenameClockDomains(input_buffer, clk_domain)
             else:
                 self.submodules += input_buffer
-            self.comb += Record.connect(sink, intput_buffer.d)
-            sink = intput_buffer.q
+            self.comb += sink.connect(intput_buffer.sink)
+            sink = intput_buffer.source
 
         # clock domain crossing (optional, required when capture_clk is not sys_clk)
         # XXX : sys_clk must be faster than capture_clk, add Converter on data to remove this limitation
@@ -50,7 +50,7 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
             self.submodules.fifo = AsyncFIFO(self.sink.description, 32)
             self.submodules += RenameClockDomains(self.fifo,
                 {"write": self.clk_domain, "read": "sys"})
-            self.comb += Record.connect(sink, self.fifo.sink)
+            self.comb += sink.connect(self.fifo.sink)
             sink = self.fifo.source
 
         # connect trigger
@@ -62,23 +62,23 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
         # insert subsampler (optional)
         if self.with_subsampler:
             self.submodules.subsampler = LiteScopeSubSampler(self.dw)
-            self.comb += Record.connect(sink, self.subsampler.sink)
+            self.comb += sink.connect(self.subsampler.sink)
             sink = self.subsampler.source
 
         # connect recorder
-        self.comb += Record.connect(self.trigger.source, self.recorder.trigger_sink)
+        self.comb += self.trigger.source.connect(self.recorder.trigger_sink)
         if self.with_rle:
             self.submodules.rle = LiteScopeRunLengthEncoder(self.dw, self.rle_length)
             self.comb += [
-                Record.connect(sink, self.rle.sink),
-                Record.connect(self.rle.source, self.recorder.data_sink),
+                sink.connect(self.rle.sink),
+                self.rle.source.connect(self.recorder.data_sink),
                 self.rle.external_enable.eq(self.recorder.post_hit)
             ]
         else:
             self.submodules.delay_buffer = Buffer(self.sink.description)
             self.comb += [
-                Record.connect(sink, self.delay_buffer.d),
-                Record.connect(self.delay_buffer.q, self.recorder.data_sink)
+                sink.connect(self.delay_buffer.sink),
+                self.delay_buffer.source.connect(self.recorder.data_sink)
             ]
 
     def export(self, vns, filename):
