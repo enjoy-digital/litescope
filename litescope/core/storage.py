@@ -22,11 +22,11 @@ class LiteScopeSubSamplerUnit(Module):
 
         done = Signal()
         self.comb += [
-            done.eq(self.counter >= self.value),
+            done.eq(counter >= self.value),
             sink.connect(source),
             source.stb.eq(sink.stb & done),
-            self.counter_ce.eq(source.ack),
-            self.counter_reset.eq(source.stb & source.ack & done)
+            counter_ce.eq(source.ack),
+            counter_reset.eq(source.stb & source.ack & done)
         ]
 
 
@@ -55,7 +55,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
         self.submodules.buf = buf = Buffer(sink.description)
         self.comb += sink.connect(buf.sink)
 
-        counter = Signals(max=length)
+        counter = Signal(max=length)
         counter_reset = Signal()
         counter_ce = Signal()
         counter_done = Signal()
