@@ -9,7 +9,8 @@ class LiteScopeLogicAnalyzerDriver():
     def __init__(self, regs, name, config_csv=None, clk_freq=None, debug=False):
         self.regs = regs
         self.name = name
-        if config_csv is None:
+        self.config_csv = config_csv
+        if self.config_csv is None:
             self.config_csv = name + ".csv"
         if clk_freq is None:
             try:
