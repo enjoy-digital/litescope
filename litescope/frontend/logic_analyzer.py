@@ -23,7 +23,7 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
         self.with_input_buffer = with_input_buffer
         self.with_subsampler = with_subsampler
 
-        self.sink = Sink(data_layout(self.dw))
+        self.sink = stream.Endpoint(data_layout(self.dw))
         self.comb += [
             self.sink.stb.eq(1),
             self.sink.data.eq(self.data)

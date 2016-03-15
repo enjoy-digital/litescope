@@ -6,8 +6,8 @@ from litescope.common import *
 
 class LiteScopeSumUnit(Module, AutoCSR):
     def __init__(self, ports):
-        self.sinks = sinks = [Sink(hit_layout()) for i in range(ports)]
-        self.source = source = Source(hit_layout())
+        self.sinks = sinks = [stream.Endpoint(hit_layout()) for i in range(ports)]
+        self.source = source = stream.Endpoint(hit_layout())
 
         self.prog_we = Signal()
         self.prog_adr = Signal(ports)
@@ -60,8 +60,8 @@ class LiteScopeTrigger(Module, AutoCSR):
     def __init__(self, dw):
         self.dw = dw
         self.ports = []
-        self.sink = Sink(data_layout(dw))
-        self.source = Source(hit_layout())
+        self.sink = stream.Endpoint(data_layout(dw))
+        self.source = stream.Endpoint(hit_layout())
 
     def add_port(self, port):
         setattr(self.submodules, "port"+str(len(self.ports)), port)

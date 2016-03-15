@@ -4,8 +4,8 @@ from litescope.common import *
 class LiteScopeTermUnit(Module):
     def __init__(self, dw):
         self.dw = dw
-        self.sink = sink = Sink(data_layout(dw))
-        self.source = source = Source(hit_layout())
+        self.sink = sink = stream.Endpoint(data_layout(dw))
+        self.source = source = stream.Endpoint(hit_layout())
 
         self.trig = Signal(dw)
         self.mask = Signal(dw)
@@ -36,8 +36,8 @@ class LiteScopeTerm(LiteScopeTermUnit, AutoCSR):
 class LiteScopeRangeDetectorUnit(Module):
     def __init__(self, dw):
         self.dw = dw
-        self.sink = sink = Sink(data_layout(dw))
-        self.source = source = Source(hit_layout())
+        self.sink = sink = stream.Endpoint(data_layout(dw))
+        self.source = source = stream.Endpoint(hit_layout())
 
         self.low = Signal(dw)
         self.high = Signal(dw)
@@ -68,8 +68,8 @@ class LiteScopeRangeDetector(LiteScopeRangeDetectorUnit, AutoCSR):
 class LiteScopeEdgeDetectorUnit(Module):
     def __init__(self, dw):
         self.dw = dw
-        self.sink = sink = Sink(data_layout(dw))
-        self.source = source = Source(hit_layout())
+        self.sink = sink = stream.Endpoint(data_layout(dw))
+        self.source = source = stream.Endpoint(hit_layout())
 
         self.rising_mask = Signal(dw)
         self.falling_mask = Signal(dw)

@@ -3,8 +3,8 @@ from litescope.common import *
 
 class LiteScopeSubSamplerUnit(Module):
     def __init__(self, dw):
-        self.sink = sink = Sink(data_layout(dw))
-        self.source = source = Source(data_layout(dw))
+        self.sink = sink = stream.Endpoint(data_layout(dw))
+        self.source = source = stream.Endpoint(data_layout(dw))
         self.value = Signal(32)
 
         # # #
@@ -45,8 +45,8 @@ class LiteScopeRunLengthEncoderUnit(Module):
         self.dw = dw
         self.length = length
 
-        self.sink = sink = Sink(data_layout(dw))
-        self.source = source = Source(data_layout(dw))
+        self.sink = sink = stream.Endpoint(data_layout(dw))
+        self.source = source = stream.Endpoint(data_layout(dw))
 
         self.enable = Signal()
 
@@ -116,8 +116,8 @@ class LiteScopeRecorderUnit(Module):
         self.dw = dw
         self.depth = depth
 
-        self.trigger_sink = trigger_sink = Sink(hit_layout())
-        self.data_sink = data_sink = Sink(data_layout(dw))
+        self.trigger_sink = trigger_sink = stream.Endpoint(hit_layout())
+        self.data_sink = data_sink = stream.Endpoint(data_layout(dw))
 
         self.trigger = Signal()
         self.qualifier = Signal()
@@ -126,7 +126,7 @@ class LiteScopeRecorderUnit(Module):
         self.done = Signal()
         self.post_hit = Signal()
 
-        self.source = Source(data_layout(dw))
+        self.source = stream.Endpoint(data_layout(dw))
 
         # # #
 
