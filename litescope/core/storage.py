@@ -24,9 +24,9 @@ class LiteScopeSubSamplerUnit(Module):
         self.comb += [
             done.eq(counter >= self.value),
             sink.connect(source),
-            source.stb.eq(sink.stb & done),
-            counter_ce.eq(source.ack),
-            counter_reset.eq(source.stb & source.ack & done)
+            source.valid.eq(sink.valid & done),
+            counter_ce.eq(source.ready),
+            counter_reset.eq(source.valid & source.ready & done)
         ]
 
 
@@ -69,7 +69,7 @@ class LiteScopeRunLengthEncoderUnit(Module):
 
         change = Signal()
         self.comb += change.eq(
-            sink.stb &
+            sink.valid &
             (sink.data != buf.source.data)
         )
 
@@ -77,23 +77,23 @@ class LiteScopeRunLengthEncoderUnit(Module):
         fsm.act("BYPASS",
             buf.source.connect(source),
             counter_reset.eq(1),
-            If(sink.stb & ~change,
+            If(sink.valid & ~change,
                 If(self.enable,
                     NextState("COUNT")
                 )
             )
         )
         fsm.act("COUNT",
-            buf.source.ack.eq(1),
-            counter_ce.eq(sink.stb),
+            buf.source.ready.eq(1),
+            counter_ce.eq(sink.valid),
             If(~self.enable,
                 NextState("BYPASS")
             ).Elif(change | counter_done,
-                source.stb.eq(1),
+                source.valid.eq(1),
                 source.data[:len(counter)].eq(counter),
                 source.data[-1].eq(1),  # Set RLE bit
-                buf.source.ack.eq(source.ack),
-                If(source.ack,
+                buf.source.ready.eq(source.ready),
+                If(source.ready,
                     NextState("BYPASS")
                 )
             )
@@ -136,7 +136,7 @@ class LiteScopeRecorderUnit(Module):
         fsm = FSM(reset_state="IDLE")
         self.submodules += fsm
         self.comb += [
-            self.source.stb.eq(fifo.source.stb),
+            self.source.valid.eq(fifo.source.valid),
             self.source.data.eq(fifo.source.data)
         ]
         fsm.act("IDLE",
@@ -145,31 +145,31 @@ class LiteScopeRecorderUnit(Module):
                 NextState("PRE_HIT_RECORDING"),
                 fifo.reset.eq(1),
             ),
-            fifo.source.ack.eq(self.source.ack)
+            fifo.source.ready.eq(self.source.ready)
         )
         fsm.act("PRE_HIT_RECORDING",
-            fifo.sink.stb.eq(data_sink.stb),
+            fifo.sink.valid.eq(data_sink.valid),
             fifo.sink.data.eq(data_sink.data),
-            data_sink.ack.eq(fifo.sink.ack),
+            data_sink.ready.eq(fifo.sink.ready),
 
-            fifo.source.ack.eq(fifo.level >= self.offset),
-            If(trigger_sink.stb & trigger_sink.hit,
+            fifo.source.ready.eq(fifo.level >= self.offset),
+            If(trigger_sink.valid & trigger_sink.hit,
                 NextState("POST_HIT_RECORDING")
             )
         )
         fsm.act("POST_HIT_RECORDING",
             self.post_hit.eq(1),
             If(self.qualifier,
-                fifo.sink.stb.eq(trigger_sink.stb &
+                fifo.sink.valid.eq(trigger_sink.valid &
                                  trigger_sink.hit &
-                                 data_sink.stb)
+                                 data_sink.valid)
             ).Else(
-                fifo.sink.stb.eq(data_sink.stb)
+                fifo.sink.valid.eq(data_sink.valid)
             ),
             fifo.sink.data.eq(data_sink.data),
-            data_sink.ack.eq(fifo.sink.ack),
+            data_sink.ready.eq(fifo.sink.ready),
 
-            If(~fifo.sink.ack | (fifo.level >= self.length),
+            If(~fifo.sink.ready | (fifo.level >= self.length),
                 NextState("IDLE")
             )
         )
@@ -185,8 +185,8 @@ class LiteScopeRecorder(LiteScopeRecorderUnit, AutoCSR):
         self._offset = CSRStorage(bits_for(depth))
         self._done = CSRStatus()
 
-        self._source_stb = CSRStatus()
-        self._source_ack = CSR()
+        self._source_valid = CSRStatus()
+        self._source_ready = CSR()
         self._source_data = CSRStatus(dw)
 
         # # #
@@ -198,7 +198,7 @@ class LiteScopeRecorder(LiteScopeRecorderUnit, AutoCSR):
             self.offset.eq(self._offset.storage),
             self._done.status.eq(self.done),
 
-            self._source_stb.status.eq(self.source.stb),
+            self._source_valid.status.eq(self.source.valid),
             self._source_data.status.eq(self.source.data),
-            self.source.ack.eq(self._source_ack.re)
+            self.source.ready.eq(self._source_ready.re)
         ]

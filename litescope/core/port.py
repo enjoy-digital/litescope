@@ -13,9 +13,9 @@ class LiteScopeTermUnit(Module):
         # # #
 
         self.comb += [
-            source.stb.eq(sink.stb),
+            source.valid.eq(sink.valid),
             source.hit.eq((sink.data & self.mask) == self.trig),
-            sink.ack.eq(source.ack)
+            sink.ready.eq(source.ready)
         ]
 
 
@@ -45,9 +45,9 @@ class LiteScopeRangeDetectorUnit(Module):
         # # #
 
         self.comb += [
-            source.stb.eq(sink.stb),
+            source.valid.eq(sink.valid),
             source.hit.eq((sink.data >= self.low) & (sink.data <= self.high)),
-            sink.ack.eq(source.ack)
+            sink.ready.eq(source.ready)
         ]
 
 
@@ -90,8 +90,8 @@ class LiteScopeEdgeDetectorUnit(Module):
         self.comb += both.eq(self.both_mask & (rising | falling))
 
         self.comb += [
-            source.stb.eq(sink.stb & self.buffer.q.stb),
-            self.buffer.q.ack.eq(source.ack),
+            source.valid.eq(sink.valid & self.buffer.q.valid),
+            self.buffer.q.ready.eq(source.ready),
             source.hit.eq((rising | falling | both) != 0)
         ]
 

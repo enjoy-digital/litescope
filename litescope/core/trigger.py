@@ -33,11 +33,11 @@ class LiteScopeSumUnit(Module, AutoCSR):
 
         # drive source
         self.comb += [
-            source.stb.eq(reduce(and_, [sink.stb for sink in sinks])),
+            source.valid.eq(reduce(and_, [sink.valid for sink in sinks])),
             source.hit.eq(lut.dat_r)
         ]
         for i, sink in enumerate(sinks):
-            self.comb += sink.ack.eq(sink.stb & source.ack)
+            self.comb += sink.ready.eq(sink.valid & source.ready)
 
 
 class LiteScopeSum(LiteScopeSumUnit, AutoCSR):
@@ -70,11 +70,11 @@ class LiteScopeTrigger(Module, AutoCSR):
     def do_finalize(self):
         self.submodules.sum = LiteScopeSum(len(self.ports))
         for i, port in enumerate(self.ports):
-            # Note: port's ack is not used and supposed to be always 1
+            # Note: port's ready is not used and supposed to be always 1
             self.comb += [
-                port.sink.stb.eq(self.sink.stb),
+                port.sink.valid.eq(self.sink.valid),
                 port.sink.data.eq(self.sink.data),
-                self.sink.ack.eq(1),
+                self.sink.ready.eq(1),
                 port.source.connect(self.sum.sinks[i])
             ]
         self.comb += self.sum.source.connect(self.source)

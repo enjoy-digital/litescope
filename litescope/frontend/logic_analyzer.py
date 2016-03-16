@@ -25,7 +25,7 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
 
         self.sink = stream.Endpoint(data_layout(self.dw))
         self.comb += [
-            self.sink.stb.eq(1),
+            self.sink.valid.eq(1),
             self.sink.data.eq(self.data)
         ]
 
@@ -55,7 +55,7 @@ class LiteScopeLogicAnalyzer(Module, AutoCSR):
 
         # connect trigger
         self.comb += [
-            self.trigger.sink.stb.eq(sink.stb),
+            self.trigger.sink.valid.eq(sink.valid),
             self.trigger.sink.data.eq(sink.data),
         ]
 
