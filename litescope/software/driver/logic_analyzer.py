@@ -1,5 +1,6 @@
 from struct import *
 from litex.gen.fhdl.structure import *
+from litescope.software.dump.common import *
 from litescope.software.dump import *
 from litescope.software.driver.truthtable import *
 
@@ -116,6 +117,12 @@ class LiteScopeLogicAnalyzerDriver():
         while self.recorder_source_valid.read():
             self.data.append(self.recorder_source_data.read())
             self.recorder_source_ready.write(1)
+        if self.clk_ratio > 1:
+            new_data = DumpData(self.dw)
+            for data in self.data:
+                for i in range(self.clk_ratio):
+                    new_data.append(*get_bits([data], i*self.dw, (i+1)*self.dw))
+            self.data = new_data
         if self.with_rle:
             if self.rle_enable.read():
                 self.data = self.data.decode_rle()
