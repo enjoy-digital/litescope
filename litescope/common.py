@@ -6,8 +6,8 @@ from litex.soc.interconnect.stream import *
 
 
 def data_layout(dw):
-    return [("data", dw, DIR_M_TO_S)]
+    return [("data", dw)]
 
 
 def hit_layout():
-    return [("hit", 1, DIR_M_TO_S)]
+    return [("hit", 1)]
