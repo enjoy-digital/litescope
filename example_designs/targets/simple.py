@@ -1,17 +1,16 @@
+from litex.gen import *
 from litex.gen.genlib.io import CRG
-
-from litescope.common import *
-from litescope.core.port import LiteScopeTerm
-from litescope.frontend.inout import LiteScopeInOut
-from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
 
 from litex.soc.integration.soc_core import SoCCore
 from litex.soc.cores.uart.bridge import UARTWishboneBridge
 
+from litescope import LiteScopeIO, LiteScopeAnalyzer
+
+
 class LiteScopeSoC(SoCCore):
     csr_map = {
-        "inout" :          16,
-        "logic_analyzer" : 17
+        "io":       16,
+        "analyzer": 17
     }
     csr_map.update(SoCCore.csr_map)
 
@@ -28,21 +27,20 @@ class LiteScopeSoC(SoCCore):
         self.add_wb_master(self.cpu_or_bridge.wishbone)
         self.submodules.crg = CRG(platform.request(platform.default_clk_name))
 
-        self.submodules.inout = LiteScopeInOut(8)
+        self.submodules.io = LiteScopeIO(8)
         for i in range(8):
             try:
-                self.comb += platform.request("user_led", i).eq(self.inout.o[i])
+                self.comb += platform.request("user_led", i).eq(self.io.output[i])
             except:
                 pass
 
         counter = Signal(16)
         self.sync += counter.eq(counter + 1)
+        toto = Signal()
 
-        self.debug = (counter)
-        self.submodules.logic_analyzer = LiteScopeLogicAnalyzer(self.debug, 512, with_rle=True, with_subsampler=True)
-        self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
+        self.submodules.analyzer = LiteScopeAnalyzer(counter, 512)
 
     def do_exit(self, vns):
-        self.logic_analyzer.export(vns, "test/logic_analyzer.csv")
+        self.analyzer.export_csv(vns, "test/analyzer.csv")
 
 default_subtarget = LiteScopeSoC

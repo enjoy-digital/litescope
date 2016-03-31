@@ -1,12 +1,12 @@
-from struct import *
+import os
+
 from litex.gen.fhdl.structure import *
 from litescope.software.dump.common import *
 from litescope.software.dump import *
-from litescope.software.driver.truthtable import *
 
 import csv
 
-class LiteScopeLogicAnalyzerDriver():
+class LiteScopeAnalyzerDriver():
     def __init__(self, regs, name, config_csv=None, clk_freq=None, debug=False):
         self.regs = regs
         self.name = name
@@ -14,11 +14,8 @@ class LiteScopeLogicAnalyzerDriver():
         if self.config_csv is None:
             self.config_csv = name + ".csv"
         if clk_freq is None:
-            try:
-                self.clk_freq = regs.identifier_frequency.read()
-            except:
-                self.clk_freq = None
-            self.samplerate = self.clk_freq
+            self.clk_freq = None
+            self.samplerate = None
         else:
             self.clk_freq = clk_freq
             self.samplerate = clk_freq
@@ -40,7 +37,7 @@ class LiteScopeLogicAnalyzerDriver():
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
         for item in csv_reader:
             t, n, v = item
-            if t == "layout":
+            if t == "signal":
                 self.layout.append((n, int(v)))
 
     def build(self):
@@ -57,75 +54,47 @@ class LiteScopeLogicAnalyzerDriver():
             setattr(self, name + "_m", (2**length-1) << value)
             value += length
 
-    def configure_term(self, port, trigger=0, mask=0, cond=None):
+    def configure_trigger(self, value=0, mask=0, cond=None):
         if cond is not None:
             for k, v in cond.items():
-                trigger |= getattr(self, k + "_o")*v
+                value |= getattr(self, k + "_o")*v
                 mask |= getattr(self, k + "_m")
-        t = getattr(self, "trigger_port{d}_trig".format(d=int(port)))
-        m = getattr(self, "trigger_port{d}_mask".format(d=int(port)))
-        t.write(trigger)
+        t = getattr(self, "frontend_trigger_value")
+        m = getattr(self, "frontend_trigger_mask")
+        t.write(value)
         m.write(mask)
 
-    def configure_range_detector(self, port, low, high):
-        l = getattr(self, "trigger_port{d}_low".format(d=int(port)))
-        h = getattr(self, "trigger_port{d}_high".format(d=int(port)))
-        l.write(low)
-        h.write(high)
-
-    def configure_edge_detector(self, port, rising_mask, falling_mask, both_mask):
-        rm = getattr(self, "trigger_port{d}_rising_mask".format(d=int(port)))
-        fm = getattr(self, "trigger_port{d}_falling_mask".format(d=int(port)))
-        bm = getattr(self, "trigger_port{d}_both_mask".format(d=int(port)))
-        rm.write(rising_mask)
-        fm.write(falling_mask)
-        bm.write(both_mask)
-
-    def configure_sum(self, equation):
-        datas = gen_truth_table(equation)
-        for adr, dat in enumerate(datas):
-            self.trigger_sum_prog_adr.write(adr)
-            self.trigger_sum_prog_dat.write(dat)
-            self.trigger_sum_prog_we.write(1)
-
-    def configure_subsampler(self, n):
-        self.subsampler_value.write(n-1)
+    def configure_subsampler(self, value):
+        self.frontend_subsampler_value.write(value-1)
         if self.clk_freq is not None:
             self.samplerate = self.clk_freq//n
         else:
             self.samplerate = None
 
-    def configure_qualifier(self, v):
-        self.recorder_qualifier.write(v)
-
-    def configure_rle(self, v):
-        self.rle_enable.write(v)
-
     def done(self):
-        return self.recorder_done.read()
+        return self.storage_idle.read()
 
     def run(self, offset, length):
+        while self.storage_mem_valid.read():
+            self.storage_mem_ready.write(1)
         if self.debug:
             print("running")
-        self.recorder_offset.write(offset)
-        self.recorder_length.write(length)
-        self.recorder_trigger.write(1)
+        self.storage_offset.write(offset)
+        self.storage_length.write(length)
+        self.storage_start.write(1)
 
     def upload(self):
         if self.debug:
             print("uploading")
-        while self.recorder_source_valid.read():
-            self.data.append(self.recorder_source_data.read())
-            self.recorder_source_ready.write(1)
-        if self.clk_ratio > 1:
+        while self.storage_mem_valid.read():
+            self.data.append(self.storage_mem_data.read())
+            self.storage_mem_ready.write(1)
+        if self.cd_ratio > 1:
             new_data = DumpData(self.dw)
             for data in self.data:
                 for i in range(self.clk_ratio):
                     new_data.append(*get_bits([data], i*self.dw, (i+1)*self.dw))
             self.data = new_data
-        if self.with_rle:
-            if self.rle_enable.read():
-                self.data = self.data.decode_rle()
         return self.data
 
     def save(self, filename):

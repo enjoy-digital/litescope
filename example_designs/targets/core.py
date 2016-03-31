@@ -9,9 +9,7 @@ from litex.build.xilinx.platform import XilinxPlatform
 from litex.soc.integration.soc_core import SoCCore
 from litex.soc.cores.uart.bridge import UARTWishboneBridge
 
-from litescope.core.port import LiteScopeTerm
-from litescope.frontend.inout import LiteScopeInOut
-from litescope.frontend.logic_analyzer import LiteScopeLogicAnalyzer
+from litescope import LiteScopeAnalyzer
 
 
 _io = [
@@ -37,7 +35,7 @@ class CorePlatform(XilinxPlatform):
 class Core(SoCCore):
     platform = CorePlatform()
     csr_map = {
-        "logic_analyzer":    16
+        "analyzer":    16
     }
     csr_map.update(SoCCore.csr_map)
 
@@ -58,7 +56,6 @@ class Core(SoCCore):
         self.add_wb_master(self.cpu_or_bridge.wishbone)
 
         self.bus = platform.request("bus")
-        self.submodules.logic_analyzer = LiteScopeLogicAnalyzer((self.bus), 512, with_rle=True, with_subsampler=True)
-        self.logic_analyzer.trigger.add_port(LiteScopeTerm(self.logic_analyzer.dw))
+        self.submodules.analyzer = LiteScopeAnalyzer((self.bus), 512)
 
 default_subtarget = Core

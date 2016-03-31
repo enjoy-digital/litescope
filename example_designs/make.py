@@ -15,10 +15,6 @@ from litex.build.xilinx.common import *
 
 from litex.soc.integration import cpu_interface
 
-litescope_path = "../"
-sys.path.append(litescope_path) # XXX
-from litescope.common import *
-
 
 def autotype(s):
     if s == "True":
@@ -124,27 +120,23 @@ if __name__ == "__main__":
        logic analyzer core powered by Migen
 
 ====== Building parameters: ======""")
-if hasattr(soc, "inout"):
+if hasattr(soc, "io"):
     print("""
 LiscopeIO
 ---------
 Width: {}
-""".format(soc.inout.dw)
+""".format(soc.io.dw)
 )
 
-if hasattr(soc, "logic_analyzer"):
+if hasattr(soc, "analyzer"):
     print("""
-LiscopeLA
+LiscopeAnalyzer
 ---------
 Width: {}
 Depth: {}
-Subsampler: {}
-RLE: {}
 ===============================""".format(
-    soc.logic_analyzer.dw,
-    soc.logic_analyzer.depth,
-    str(soc.logic_analyzer.with_subsampler),
-    str(soc.logic_analyzer.with_rle)
+    soc.analyzer.dw,
+    soc.analyzer.depth
     )
 )
 

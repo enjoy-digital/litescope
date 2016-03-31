@@ -45,20 +45,6 @@ class DumpData(list):
         else:
             raise KeyError
 
-    def decode_rle(self):
-        datas = DumpData(self.width - 1)
-        last_data = 0
-        for data in self:
-            rle = data >> (self.width - 1)
-            data = data & (2**(self.width - 1) - 1)
-            if rle:
-                for i in range(data):
-                    datas.append(last_data)
-            else:
-                datas.append(data)
-                last_data = data
-        return datas
-
 
 class DumpVariable:
     def __init__(self, name, width, values=[]):

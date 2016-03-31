@@ -34,15 +34,12 @@ design flow by generating the verilog rtl that you will use as a standard core.
 
 [> Features
 ------------
-- IO peek and poke with LiteScopeInOut
-- Logic analyser with LiteScopeLogicAnalyzer:
-  - Various triggering modules: Term, Range, Edge (add yours! :)
-  - Run Length Encoder to "compress" data and increase recording depth
+- IO peek and poke with LiteScopeIO
+- Logic analyser with LiteScopeAnalyzer:
   - Subsampling
-  - Storage qualifier
   - Data storage in block rams
 - Bridges:
-  - UART2Wishbone (provided by LiteScope)
+  - UART2Wishbone (provided by LiteX)
   - Ethernet2Wishbone ("Etherbone") (when used with LiteEth)
   - PCIe2Wishbone (when used with LitePCIe)
 - Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
@@ -83,11 +80,9 @@ devel [AT] lists.m-labs.hk.
 
 4. Test design:
   go to test and run:
-  ./make.py --port your_serial_port test_inout (will blink leds)
-  ./make.py --port your_serial_port test_logic_analyzer (will capture counter)
-
-  tests can also be executed over Etherbone (provided with LiteEth):
-  ./make.py --ip_address fpga_ip_address your_test
+  litex_server --port your_serial_port
+  python3 test_io.py (led blinker)
+  python3 test_analyzer.py (capture counter with analyzer)
 
 [> Simulations
 ---------------
