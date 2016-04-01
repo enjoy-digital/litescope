@@ -13,18 +13,27 @@ class TB(Module):
 def main_generator(dut):
     yield dut.analyzer.frontend.trigger.value.storage.eq(0x0080)
     yield dut.analyzer.frontend.trigger.mask.storage.eq(0xfff0)
-    yield dut.analyzer.frontend.subsampler.value.storage.eq(1)
+    yield dut.analyzer.frontend.subsampler.value.storage.eq(0)
     yield
-    yield dut.analyzer.storage.length.storage.eq(32)
-    yield dut.analyzer.storage.offset.storage.eq(16)
+    yield dut.analyzer.storage.length.storage.eq(64)
+    yield dut.analyzer.storage.offset.storage.eq(32)
     for i in range(16):
         yield
     yield dut.analyzer.storage.start.re.eq(1)
     yield
     yield dut.analyzer.storage.start.re.eq(0)
     yield
-    for i in range(1024):
+    while not (yield dut.analyzer.storage.idle.status):
         yield
+    data = []
+    while (yield dut.analyzer.storage.mem_valid.status):
+        data.append((yield dut.analyzer.storage.mem_data.status))
+        yield dut.analyzer.storage.mem_ready.re.eq(1)
+        yield dut.analyzer.storage.mem_ready.r.eq(1)
+        yield
+    print(data)
+    print(len(data))
+    print(data[32])
 
 if __name__ == "__main__":
     tb = TB()
