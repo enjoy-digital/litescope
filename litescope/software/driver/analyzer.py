@@ -92,7 +92,7 @@ class LiteScopeAnalyzerDriver():
         if self.cd_ratio > 1:
             new_data = DumpData(self.dw)
             for data in self.data:
-                for i in range(self.clk_ratio):
+                for i in range(self.cd_ratio):
                     new_data.append(*get_bits([data], i*self.dw, (i+1)*self.dw))
             self.data = new_data
         return self.data

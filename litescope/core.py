@@ -10,8 +10,8 @@ from litex.soc.interconnect import stream
 def ceil_pow2(v):
     return 2**(bits_for(v-1))
 
-def core_layout(dw):
-    return [("data", dw), ("hit", 1)]
+def core_layout(dw, hw=1):
+    return [("data", dw), ("hit", hw)]
 
 class FrontendTrigger(Module, AutoCSR):
     def __init__(self, dw, cd):
@@ -82,10 +82,10 @@ class AnalyzerFrontend(Module, AutoCSR):
         self.submodules.subsampler = FrontendSubSampler(dw, cd)
         self.submodules.converter = ClockDomainsRenamer(cd)(
                                         stream.StrideConverter(
-                                            core_layout(dw),
-                                            core_layout(dw*cd_ratio)))
+                                            core_layout(dw, 1),
+                                            core_layout(dw*cd_ratio, cd_ratio)))
         self.submodules.fifo = ClockDomainsRenamer({"write": cd, "read": "sys"})(
-                                   stream.AsyncFIFO(core_layout(dw*cd_ratio), 8))
+                                   stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio), 8))
 
         self.submodules.pipeline = stream.Pipeline(self.sink,
                                                    self.buffer,
@@ -97,8 +97,8 @@ class AnalyzerFrontend(Module, AutoCSR):
 
 
 class AnalyzerStorage(Module, AutoCSR):
-    def __init__(self, dw, depth):
-        self.sink = stream.Endpoint(core_layout(dw))
+    def __init__(self, dw, depth, cd_ratio):
+        self.sink = stream.Endpoint(core_layout(dw, cd_ratio))
 
         self.start = CSR()
         self.length = CSRStorage(bits_for(depth))
@@ -114,7 +114,7 @@ class AnalyzerStorage(Module, AutoCSR):
 
         # # #
 
-        mem = stream.SyncFIFO([("data", dw)], depth, buffered=True)
+        mem = stream.SyncFIFO([("data", dw)], depth//cd_ratio, buffered=True)
         self.submodules += mem
 
         fsm = FSM(reset_state="IDLE")
@@ -131,7 +131,7 @@ class AnalyzerStorage(Module, AutoCSR):
         fsm.act("WAIT",
             self.wait.status.eq(1),
             self.sink.connect(mem.sink, leave_out=set(["hit"])),
-            If(self.sink.valid & self.sink.hit,
+            If(self.sink.valid & (self.sink.hit != 0),
                 NextState("RUN")
             ),
             mem.source.ready.eq(mem.level >= self.offset.storage)
@@ -176,7 +176,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
         # # #
 
         self.submodules.frontend = AnalyzerFrontend(self.dw, cd, cd_ratio)
-        self.submodules.storage = AnalyzerStorage(self.core_dw, depth//cd_ratio)
+        self.submodules.storage = AnalyzerStorage(self.core_dw, depth, cd_ratio)
 
         self.comb += [
             self.frontend.sink.valid.eq(1),
