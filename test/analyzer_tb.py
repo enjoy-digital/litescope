@@ -8,15 +8,15 @@ class TB(Module):
         counter = Signal(16)
         self.sync += counter.eq(counter + 1)
 
-        self.submodules.analyzer = LiteScopeAnalyzer(counter, 128)
+        self.submodules.analyzer = LiteScopeAnalyzer(counter, 512)
 
 def main_generator(dut):
     yield dut.analyzer.frontend.trigger.value.storage.eq(0x0080)
     yield dut.analyzer.frontend.trigger.mask.storage.eq(0xfff0)
-    yield dut.analyzer.frontend.subsampler.value.storage.eq(0)
+    yield dut.analyzer.frontend.subsampler.value.storage.eq(2)
     yield
-    yield dut.analyzer.storage.length.storage.eq(64)
-    yield dut.analyzer.storage.offset.storage.eq(32)
+    yield dut.analyzer.storage.length.storage.eq(256)
+    yield dut.analyzer.storage.offset.storage.eq(8)
     for i in range(16):
         yield
     yield dut.analyzer.storage.start.re.eq(1)
@@ -31,9 +31,12 @@ def main_generator(dut):
         yield dut.analyzer.storage.mem_ready.re.eq(1)
         yield dut.analyzer.storage.mem_ready.r.eq(1)
         yield
+        yield dut.analyzer.storage.mem_ready.re.eq(0)
+        yield dut.analyzer.storage.mem_ready.r.eq(0)
+        yield
+
     print(data)
     print(len(data))
-    print(data[32])
 
 if __name__ == "__main__":
     tb = TB()

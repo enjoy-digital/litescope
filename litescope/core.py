@@ -134,13 +134,14 @@ class AnalyzerStorage(Module, AutoCSR):
             If(self.sink.valid & self.sink.hit,
                 NextState("RUN")
             ),
-            mem.source.ready.eq(mem.level == self.offset.storage)
+            mem.source.ready.eq(mem.level >= self.offset.storage)
         )
         fsm.act("RUN",
             self.run.status.eq(1),
             self.sink.connect(mem.sink, leave_out=set(["hit"])),
-            If(~mem.sink.ready | (mem.level == self.length.storage),
-                NextState("IDLE")
+            If(~mem.sink.ready | (mem.level >= self.length.storage),
+                NextState("IDLE"),
+                mem.source.ready.eq(1)
             )
         )
         self.comb += [
