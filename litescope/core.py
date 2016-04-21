@@ -65,7 +65,7 @@ class FrontendSubSampler(Module, AutoCSR):
 
         self.comb += [
             done.eq(counter == value),
-            self.sink.connect(self.source, leave_out=set(["valid"])),
+            self.sink.connect(self.source, omit=set(["valid"])),
             self.source.valid.eq(self.sink.valid & done)
         ]
 
@@ -130,7 +130,7 @@ class AnalyzerStorage(Module, AutoCSR):
         )
         fsm.act("WAIT",
             self.wait.status.eq(1),
-            self.sink.connect(mem.sink, leave_out=set(["hit"])),
+            self.sink.connect(mem.sink, omit=set(["hit"])),
             If(self.sink.valid & (self.sink.hit != 0),
                 NextState("RUN")
             ),
@@ -138,7 +138,7 @@ class AnalyzerStorage(Module, AutoCSR):
         )
         fsm.act("RUN",
             self.run.status.eq(1),
-            self.sink.connect(mem.sink, leave_out=set(["hit"])),
+            self.sink.connect(mem.sink, omit=set(["hit"])),
             If(~mem.sink.ready | (mem.level >= self.length.storage),
                 NextState("IDLE"),
                 mem.source.ready.eq(1)
