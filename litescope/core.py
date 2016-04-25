@@ -17,7 +17,6 @@ class FrontendTrigger(Module, AutoCSR):
     def __init__(self, dw, cd):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw))
-        dw = len(self.sink.payload.raw_bits())
 
         self.value = CSRStorage(dw)
         self.mask = CSRStorage(dw)
