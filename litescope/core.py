@@ -7,9 +7,6 @@ from litex.soc.interconnect.csr import *
 from litex.soc.cores.gpio import GPIOInOut
 from litex.soc.interconnect import stream
 
-def ceil_pow2(v):
-    return 2**(bits_for(v-1))
-
 def core_layout(dw, hw=1):
     return [("data", dw), ("hit", hw)]
 
@@ -166,7 +163,7 @@ class LiteScopeIO(Module, AutoCSR):
 class LiteScopeAnalyzer(Module, AutoCSR):
     def __init__(self, signals, depth, cd="sys", cd_ratio=1):
         self.signals = [signals] if not isinstance(signals, list) else signals
-        self.dw = ceil_pow2(sum([len(s) for s in signals]))
+        self.dw = sum([len(s) for s in signals])
         self.core_dw = self.dw*cd_ratio
 
         self.depth = depth
