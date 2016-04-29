@@ -11,7 +11,7 @@ if sys.version_info[:3] < (3, 3):
 
 setup(
     name="litescope",
-	version="1.0",
+	version="0.1",
 	description="small footprint and configurable embedded FPGA logic analyzer core",
 	long_description=open("README").read(),
 	author="Florent Kermarrec",
