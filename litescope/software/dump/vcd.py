@@ -41,14 +41,8 @@ class VCDDump(Dump):
 
     def generate_version(self):
         r = "$version\n"
-        r += "\tmiscope VCD dump\n"
+        r += "\tlitescope VCD dump\n"
         r += "$end\n"
-        return r
-
-    def generate_comment(self):
-        r = "$comment\n"
-        r += self.comment
-        r += "\n$end\n"
         return r
 
     def generate_timescale(self):
@@ -57,14 +51,10 @@ class VCDDump(Dump):
         r += " $end\n"
         return r
 
-    def generate_scope(self):
+    def generate_vars(self):
         r = "$scope "
         r += self.timescale
         r += " $end\n"
-        return r
-
-    def generate_vars(self):
-        r = ""
         for v in self.variables:
             r += "$var wire "
             r += str(v.width)
@@ -73,15 +63,9 @@ class VCDDump(Dump):
             r += " "
             r += v.name
             r += " $end\n"
-        return r
-
-    def generate_unscope(self):
-        r = "$unscope "
+        r += "$unscope "
         r += " $end\n"
-        return r
-
-    def generate_enddefinitions(self):
-        r = "$enddefinitions "
+        r += "$enddefinitions "
         r += " $end\n"
         return r
 
@@ -118,12 +102,8 @@ class VCDDump(Dump):
         self.finalize()
         f = open(filename, "w")
         f.write(self.generate_date())
-        f.write(self.generate_comment())
         f.write(self.generate_timescale())
-        f.write(self.generate_scope())
         f.write(self.generate_vars())
-        f.write(self.generate_unscope())
-        f.write(self.generate_enddefinitions())
         f.write(self.generate_dumpvars())
         f.write(self.generate_valuechange())
         f.close()

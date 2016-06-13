@@ -66,8 +66,11 @@ class Dump:
     def add_from_layout(self, layout, variable):
         i = 0
         for s, n in layout:
-            self.add(DumpVariable(s, n, variable[i:i+n]))
+            values = variable[i:i+n]
+            values2x = [values[i//2] for i in range(len(values)*2)]
+            self.add(DumpVariable(s, n, values2x))
             i += n
+        self.add(DumpVariable("clk", 1, [1, 0]*(len(self)//2)))
 
     def __len__(self):
         l = 0
