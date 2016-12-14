@@ -162,7 +162,18 @@ class LiteScopeIO(Module, AutoCSR):
 
 class LiteScopeAnalyzer(Module, AutoCSR):
     def __init__(self, signals, depth, cd="sys", cd_ratio=1):
-        self.signals = [signals] if not isinstance(signals, list) else signals
+        if not isinstance(signals, list):
+            signals = [signals]
+
+        split_signals = []
+        for s in signals:
+            if isinstance(s, Record):
+                split_signals.extend(s.flatten())
+            else:
+                split_signals.append(s)
+        signals = split_signals
+
+        self.signals = signals
         self.dw = sum([len(s) for s in signals])
         self.core_dw = self.dw*cd_ratio
 
