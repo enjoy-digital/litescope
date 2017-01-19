@@ -4,6 +4,10 @@ from litex.gen import *
 
 from litescope import LiteScopeAnalyzer
 
+#TODO:
+# - improve testing with a software model and check that the implementation
+#   has a similar behaviour.
+
 
 class DUT(Module):
     def __init__(self):
