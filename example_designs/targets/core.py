@@ -7,7 +7,7 @@ from litex.build.generic_platform import *
 from litex.build.xilinx.platform import XilinxPlatform
 
 from litex.soc.integration.soc_core import SoCCore
-from litex.soc.cores.uart.bridge import UARTWishboneBridge
+from litex.soc.cores.uart import UARTWishboneBridge
 
 from litescope import LiteScopeAnalyzer
 
