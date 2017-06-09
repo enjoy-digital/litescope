@@ -66,6 +66,21 @@ class FrontendSubSampler(Module, AutoCSR):
         ]
 
 
+class AnalyzerMux(Module, AutoCSR):
+    def __init__(self, dw, n):
+        self.sinks = [stream.Endpoint(core_layout(dw)) for i in range(n)]
+        self.source = stream.Endpoint(core_layout(dw))
+
+        self.value = CSRStorage(bits_for(n))
+
+        # # #
+
+        cases = {}
+        for i in range(n):
+            cases[i] = self.sinks[i].connect(self.source)
+        self.comb += Case(self.value.storage, cases)
+
+
 class AnalyzerFrontend(Module, AutoCSR):
     def __init__(self, dw, cd, cd_ratio):
         self.sink = stream.Endpoint(core_layout(dw))
@@ -160,8 +175,11 @@ class LiteScopeIO(Module, AutoCSR):
         return self.gpio.get_csrs()
 
 
-class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, signals, depth, cd="sys", cd_ratio=1):
+def _format_groups(groups):
+    if not isinstance(groups, dict):
+        groups = {0 : groups}
+    new_groups = {}
+    for n, signals in groups.items():
         if not isinstance(signals, list):
             signals = [signals]
 
@@ -171,32 +189,40 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 split_signals.extend(s.flatten())
             else:
                 split_signals.append(s)
-        signals = split_signals
+        new_groups[n] = split_signals
+    return new_groups
 
-        self.signals = signals
-        self.dw = sum([len(s) for s in signals])
-        self.core_dw = self.dw*cd_ratio
+
+class LiteScopeAnalyzer(Module, AutoCSR):
+    def __init__(self, groups, depth, cd="sys", cd_ratio=1):
+        self.groups = _format_groups(groups)
+        self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
 
         self.depth = depth
         self.cd_ratio = cd_ratio
 
         # # #
 
+        self.submodules.mux = AnalyzerMux(self.dw, len(self.groups))
+        for i, signals in self.groups.items():
+            self.comb += [
+                self.mux.sinks[i].valid.eq(1),
+                self.mux.sinks[i].data.eq(Cat(signals))
+            ]
         self.submodules.frontend = AnalyzerFrontend(self.dw, cd, cd_ratio)
-        self.submodules.storage = AnalyzerStorage(self.core_dw, depth, cd_ratio)
-
+        self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio)
         self.comb += [
-            self.frontend.sink.valid.eq(1),
-            self.frontend.sink.data.eq(Cat(self.signals)),
+            self.mux.source.connect(self.frontend.sink),
             self.frontend.source.connect(self.storage.sink)
         ]
 
     def export_csv(self, vns, filename):
         def format_line(*args):
             return ",".join(args) + "\n"
-        r = format_line("config", "dw", str(self.dw))
-        r += format_line("config", "depth", str(self.depth))
-        r += format_line("config", "cd_ratio", str(int(self.cd_ratio)))
-        for s in self.signals:
-            r += format_line("signal", vns.get_name(s), str(len(s)))
+        r = format_line("config", "None", "dw", str(self.dw))
+        r += format_line("config", "None", "depth", str(self.depth))
+        r += format_line("config", "None", "cd_ratio", str(int(self.cd_ratio)))
+        for i, signals in self.groups.items():
+            for s in signals:
+                r += format_line("signal", str(i), vns.get_name(s), str(len(s)))
         write_to_file(filename, r)
