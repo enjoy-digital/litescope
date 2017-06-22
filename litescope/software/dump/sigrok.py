@@ -26,7 +26,7 @@ class SigrokDump(Dump):
 sigrok version = 0.2.0
 [device 1]
 driver = litescope
-capturefile = logic-1
+capturefile = dump
 unitsize = 1
 total probes = {}
 samplerate = {} KHz
@@ -55,7 +55,7 @@ samplerate = {} KHz
                 except:
                     pass
             datas.append(data)
-        f = open("logic-1", "wb")
+        f = open("dump", "wb")
         for data in datas:
             f.write(data.to_bytes(data_bits//8, "big"))
         f.close()
@@ -65,7 +65,7 @@ samplerate = {} KHz
         os.chdir(name)
         f.write("version")
         f.write("metadata")
-        f.write("logic-1")
+        f.write("dump")
         os.chdir("..")
         f.close()
 
@@ -112,7 +112,7 @@ samplerate = {} KHz
 
     def read_data(self, name, nprobes):
         datas = []
-        f = open("logic-1", "rb")
+        f = open("dump", "rb")
         while True:
             data = f.read(math.ceil(nprobes/8))
             if data == bytes('', "utf-8"):
