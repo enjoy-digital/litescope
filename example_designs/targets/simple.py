@@ -34,9 +34,36 @@ class LiteScopeSoC(SoCCore):
             except:
                 pass
 
-        counter = Signal(16)
+        # use name override to keep naming in capture
+        counter = Signal(4, name_override="counter")
+        counter0 = Signal(name_override="counter0")
+        counter1 = Signal(name_override="counter1")
+        counter2 = Signal(name_override="counter2")
+        counter3 = Signal(name_override="counter3")
         self.sync += counter.eq(counter + 1)
-        self.submodules.analyzer = LiteScopeAnalyzer(counter, 512)
+        self.comb += [
+            counter0.eq(counter[0]),
+            counter1.eq(counter[1]),
+            counter2.eq(counter[2]),
+            counter3.eq(counter[3]),
+        ]
+
+        # group for vcd capture
+        vcd_group = [
+            counter
+        ]
+        # group for sigrok capture (no bus support)
+        sigrok_group = [
+            counter0,
+            counter1,
+            counter2,
+            counter3
+        ]
+        analyzer_signals = {
+            0 : vcd_group,
+            1 : sigrok_group
+        }
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")

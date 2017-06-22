@@ -6,15 +6,20 @@ wb.open()
 
 # # #
 
-analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
-analyzer.configure_trigger(cond={"counter1": 0})
-analyzer.configure_subsampler(1)
-analyzer.run(offset=128, length=512)
-while not analyzer.done():
-    pass
-analyzer.upload()
-analyzer.save("dump.vcd")
-analyzer.save("dump.sr")
+dumps = {
+    0 : "dump.vcd",
+    1 : "dump.sr"
+}
+
+for group, filename in dumps.items():
+    analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
+    analyzer.configure_trigger()
+    analyzer.configure_subsampler(1)
+    analyzer.configure_group(group)
+    analyzer.run(offset=128, length=512)
+    analyzer.wait_done()
+    analyzer.upload()
+    analyzer.save(filename)
 
 # # #
 
