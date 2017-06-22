@@ -9,7 +9,7 @@
             logic analyzer core powered by LiteX
 
 [> Intro
----------
+--------
 LiteScope is a small footprint and configurable embedded logic analyzer that you
 can use in your FPGA and aims to provide a free, portable and flexible
 alternative to vendor's solutions!
@@ -33,7 +33,7 @@ LiteScope can be used as LiteX library or can be integrated with your standard
 design flow by generating the verilog rtl that you will use as a standard core.
 
 [> Features
-------------
+-----------
 - IO peek and poke with LiteScopeIO
 - Logic analyser with LiteScopeAnalyzer:
   - Subsampling
@@ -45,11 +45,11 @@ design flow by generating the verilog rtl that you will use as a standard core.
 - Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
 
 [> Proven
-----------
+---------
 LiteScope has already been used to investigate issues on commercial and open-source designs.
 
 [> Possible improvements
--------------------------
+------------------------
 - add standardized interfaces (AXI, Avalon-ST)
 - add protocols analyzers
 - add signals injection/generation
@@ -63,7 +63,7 @@ devel [AT] lists.m-labs.hk.
 
 
 [> Getting started
--------------------
+------------------
 1. Install Python3 and your vendor's software
 
 2. Obtain LiteX and install it:
@@ -84,16 +84,8 @@ devel [AT] lists.m-labs.hk.
   python3 test_io.py (led blinker)
   python3 test_analyzer.py (capture counter with analyzer)
 
-[> Simulations
----------------
-TODO
-
-[> Tests
----------
-TODO
-
 [> License
-------------
+----------
 LiteScope is released under the very permissive two-clause BSD license. Under
 the terms of this license, you are authorized to use LiteScope for closed-source
 proprietary designs.
@@ -106,7 +98,7 @@ do them if possible:
  - send us the modifications and improvements you have done to LiteScope.
 
 [> Support and consulting
---------------------------
+-------------------------
 We love open-source hardware and like sharing our designs with others.
 
 LiteScope is mainly developed and maintained by EnjoyDigital.
@@ -119,4 +111,5 @@ So feel free to contact us, we'd love to work with you! (and eventually shorten
 the list of the possible improvements :)
 
 [> Contact
+----------
 E-mail: florent [AT] enjoy-digital.fr
