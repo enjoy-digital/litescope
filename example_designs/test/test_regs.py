@@ -5,11 +5,13 @@ wb.open()
 
 # # #
 
-identifier = ""
-for i in range(30):
-    identifier += chr(wb.read(wb.bases.identifier_mem + 4*(i+1))) # TODO: why + 1?
-print(identifier)
-print("frequency : {}MHz".format(wb.constants.system_clock_frequency/1000000))
+fpga_id = ""
+for i in range(256):
+    c = chr(wb.read(wb.bases.identifier_mem + 4*i) & 0xff)
+    fpga_id += c
+    if c == "\0":
+        break
+print(fpga_id)
 
 # # #
 

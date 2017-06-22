@@ -36,8 +36,6 @@ class LiteScopeSoC(SoCCore):
 
         counter = Signal(16)
         self.sync += counter.eq(counter + 1)
-        toto = Signal()
-
         self.submodules.analyzer = LiteScopeAnalyzer(counter, 512)
 
     def do_exit(self, vns):

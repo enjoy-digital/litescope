@@ -94,6 +94,7 @@ if __name__ == "__main__":
     try:
         memory_regions = soc.get_memory_regions()
         csr_regions = soc.get_csr_regions()
+        csr_constants = soc.get_constants()
     except:
         pass
 
@@ -117,7 +118,7 @@ if __name__ == "__main__":
                               /_/
 
    A small footprint and configurable embedded FPGA
-       logic analyzer core powered by Migen
+       logic analyzer core powered by LiteX
 
 ====== Building parameters: ======""")
 if hasattr(soc, "io"):
@@ -153,7 +154,7 @@ Depth: {}
         subprocess.call(["rm", "-rf", "build/*"])
 
     if actions["build-csr-csv"]:
-        csr_csv = cpu_interface.get_csr_csv(csr_regions)
+        csr_csv = cpu_interface.get_csr_csv(csr_regions, csr_constants)
         write_to_file(args.csr_csv, csr_csv)
 
     if actions["build-core"]:
