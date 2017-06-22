@@ -1,4 +1,5 @@
 import os
+import sys
 
 from litex.gen.fhdl.structure import *
 from litescope.software.dump.common import *
@@ -89,17 +90,25 @@ class LiteScopeAnalyzerDriver:
         while self.storage_mem_valid.read():
             self.storage_mem_ready.write(1)
         if self.debug:
-            print("running")
+            print("[running]...")
         self.storage_offset.write(offset)
         self.storage_length.write(length)
         self.storage_start.write(1)
 
     def upload(self):
         if self.debug:
-            print("uploading")
-        while self.storage_mem_valid.read():
+            print("[uploading]...")
+        length = self.storage_length.read()//self.cd_ratio
+        for position in range(1, length + 1):
+            if self.debug:
+                sys.stdout.write("|{}>{}| {}%\r".format('=' * (20*position//length),
+                                                        ' ' * (20-20*position//length),
+                                                        100*position//length))
+                sys.stdout.flush()
             self.data.append(self.storage_mem_data.read())
             self.storage_mem_ready.write(1)
+        if self.debug:
+            print("")
         if self.cd_ratio > 1:
             new_data = DumpData(self.dw)
             for data in self.data:
@@ -110,7 +119,7 @@ class LiteScopeAnalyzerDriver:
 
     def save(self, filename):
         if self.debug:
-            print("saving to " + filename)
+            print("[writing to " + filename + "]...")
         name, ext = os.path.splitext(filename)
         if ext == ".vcd":
             dump = VCDDump()
