@@ -14,6 +14,7 @@ while not analyzer.done():
     pass
 analyzer.upload()
 analyzer.save("dump.vcd")
+analyzer.save("dump.sr")
 
 # # #
 

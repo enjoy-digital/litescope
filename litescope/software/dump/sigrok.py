@@ -9,10 +9,10 @@ from litescope.software.dump.common import Dump, DumpVariable
 
 
 class SigrokDump(Dump):
-    def __init__(self, dump=None, samplerate=50000000):
+    def __init__(self, dump=None, samplerate=None):
         Dump.__init__(self)
         self.variables = [] if dump is None else dump.variables
-        self.samplerate = samplerate
+        self.samplerate = 100e6 if samplerate is None else samplerate
 
     def write_version(self):
         f = open("version", "w")

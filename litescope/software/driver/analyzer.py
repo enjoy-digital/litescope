@@ -9,18 +9,12 @@ import csv
 
 
 class LiteScopeAnalyzerDriver:
-    def __init__(self, regs, name, config_csv=None, clk_freq=None, debug=False):
+    def __init__(self, regs, name, config_csv=None, debug=False):
         self.regs = regs
         self.name = name
         self.config_csv = config_csv
         if self.config_csv is None:
             self.config_csv = name + ".csv"
-        if clk_freq is None:
-            self.clk_freq = None
-            self.samplerate = None
-        else:
-            self.clk_freq = clk_freq
-            self.samplerate = clk_freq
         self.debug = debug
         self.get_config()
         self.get_layouts()
@@ -78,10 +72,6 @@ class LiteScopeAnalyzerDriver:
 
     def configure_subsampler(self, value):
         self.frontend_subsampler_value.write(value-1)
-        if self.clk_freq is not None:
-            self.samplerate = self.clk_freq//n
-        else:
-            self.samplerate = None
 
     def done(self):
         return self.storage_idle.read()
@@ -117,7 +107,7 @@ class LiteScopeAnalyzerDriver:
             self.data = new_data
         return self.data
 
-    def save(self, filename):
+    def save(self, filename, samplerate=None):
         if self.debug:
             print("[writing to " + filename + "]...")
         name, ext = os.path.splitext(filename)
@@ -128,9 +118,7 @@ class LiteScopeAnalyzerDriver:
         elif ext == ".py":
             dump = PythonDump()
         elif ext == ".sr":
-            if self.samplerate is None:
-                raise ValueError("Unable to automatically retrieve clk_freq, clk_freq parameter required")
-            dump = SigrokDump(samplerate=self.samplerate)
+            dump = SigrokDump(samplerate=samplerate)
         else:
             raise NotImplementedError
         dump.add_from_layout(self.layouts[self.group], self.data)
