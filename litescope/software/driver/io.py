@@ -1,4 +1,4 @@
-class LiteScopeIODriver():
+class LiteScopeIODriver:
     def __init__(self, regs, name):
         self.regs = regs
         self.name = name
