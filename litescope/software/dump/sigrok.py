@@ -32,7 +32,7 @@ total probes = {}
 samplerate = {} KHz
 """.format(
         len(self.variables),
-        self.samplerate//1000,
+        self.samplerate//1000*2,
     )
         for i, variable in enumerate(self.variables):
             r += "probe{} = {}\n".format(i + 1, variable.name)
