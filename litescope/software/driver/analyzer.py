@@ -86,7 +86,7 @@ class LiteScopeAnalyzerDriver:
         return self.storage_idle.read()
 
     def wait_done(self):
-        while not self.done:
+        while not self.done():
             pass
 
     def upload(self):
