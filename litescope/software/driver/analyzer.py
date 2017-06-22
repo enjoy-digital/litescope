@@ -73,9 +73,6 @@ class LiteScopeAnalyzerDriver:
     def configure_subsampler(self, value):
         self.frontend_subsampler_value.write(value-1)
 
-    def done(self):
-        return self.storage_idle.read()
-
     def run(self, offset, length):
         while self.storage_mem_valid.read():
             self.storage_mem_ready.write(1)
@@ -84,6 +81,13 @@ class LiteScopeAnalyzerDriver:
         self.storage_offset.write(offset)
         self.storage_length.write(length)
         self.storage_start.write(1)
+
+    def done(self):
+        return self.storage_idle.read()
+
+    def wait_done(self):
+        while not self.done:
+            pass
 
     def upload(self):
         if self.debug:
