@@ -40,7 +40,6 @@ samplerate = {} KHz
         f.close()
 
     def write_data(self):
-        # XXX are probes limited to 1 bit?
         data_bits = math.ceil(len(self.variables)/8)*8
         data_len = 0
         for variable in self.variables:
@@ -48,10 +47,10 @@ samplerate = {} KHz
         datas = []
         for i in range(data_len):
             data = 0
-            for j, var in enumerate(reversed(self.variables)):
+            for j, variable in enumerate(reversed(self.variables)):
                 data = data << 1
                 try:
-                    data |= variable.values[i] % 2
+                    data |= variable.values[i] & 0x1 # 1 bit probes
                 except:
                     pass
             datas.append(data)
