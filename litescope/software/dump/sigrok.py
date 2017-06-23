@@ -20,28 +20,27 @@ class SigrokDump(Dump):
         f.close()
 
     def write_metadata(self, name):
+        probe_bits = math.ceil(len(self.variables)/8)*8
         f = open("metadata", "w")
         r = """
 [global]
-sigrok version = 0.2.0
+sigrok version=0.3.0
 [device 1]
-driver = litescope
-capturefile = dump
-unitsize = 1
-total probes = {}
-samplerate = {} KHz
+capturefile=logic-1-1
+total probes={}
+samplerate={} MHz
+unitsize={}
 """.format(
-        len(self.variables),
-        self.samplerate//1000*2,
+        probe_bits,
+        self.samplerate//1e6*2,
+        probe_bits//8
     )
         for i, variable in enumerate(self.variables):
-            r += "probe{} = {}\n".format(i + 1, variable.name)
+            r += "probe{}={}\n".format(i + 1, variable.name)
         f.write(r)
         f.close()
 
     def write_data(self):
-        # TODO: study bytes/bits ordering to remove limitation
-        assert len(self.variables) < 8 
         data_bits = math.ceil(len(self.variables)/8)*8
         data_len = 0
         for variable in self.variables:
@@ -56,9 +55,9 @@ samplerate = {} KHz
                 except:
                     pass
             datas.append(data)
-        f = open("dump", "wb")
+        f = open("logic-1-1", "wb")
         for data in datas:
-            f.write(data.to_bytes(data_bits//8, "big"))
+            f.write(data.to_bytes(data_bits//8, "little"))
         f.close()
 
     def zip(self, name):
@@ -66,7 +65,7 @@ samplerate = {} KHz
         os.chdir(name)
         f.write("version")
         f.write("metadata")
-        f.write("dump")
+        f.write("logic-1-1")
         os.chdir("..")
         f.close()
 
@@ -105,7 +104,7 @@ samplerate = {} KHz
             m = re.search("samplerate = ([0-9]+) kHz", l, re.I)
             if m is not None:
                 self.samplerate = int(m.group(1))*1000
-            m = re.search("samplerate = ([0-9]+) mHz", l, re.I)
+            m = re.search("samplerate = ([0-9]+) MHz", l, re.I)
             if m is not None:
                 self.samplerate = int(m.group(1))*1000000
         f.close()
@@ -113,12 +112,12 @@ samplerate = {} KHz
 
     def read_data(self, name, nprobes):
         datas = []
-        f = open("dump", "rb")
+        f = open("logic-1-1", "rb")
         while True:
             data = f.read(math.ceil(nprobes/8))
             if data == bytes('', "utf-8"):
                 break
-            data = int.from_bytes(data, "big")
+            data = int.from_bytes(data, "little")
             datas.append(data)
         f.close()
         return datas
