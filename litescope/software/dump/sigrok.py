@@ -40,6 +40,8 @@ samplerate = {} KHz
         f.close()
 
     def write_data(self):
+        # TODO: study bytes/bits ordering to remove limitation
+        assert len(self.variables) < 8 
         data_bits = math.ceil(len(self.variables)/8)*8
         data_len = 0
         for variable in self.variables:
