@@ -45,13 +45,13 @@ class LiteScopeAnalyzerDriver:
             if self.name == key[:len(self.name)]:
                 key = key.replace(self.name + "_", "")
                 setattr(self, key, value)
-        value = 1
         for signals in self.layouts.values():
+            value = 1
             for name, length in signals:
                 setattr(self, name + "_o", value)
                 value = value*(2**length)
-        value = 0
         for signals in self.layouts.values():
+            value = 0
             for name, length in signals:
                 setattr(self, name + "_m", (2**length-1) << value)
                 value += length
