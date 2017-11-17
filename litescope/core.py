@@ -119,6 +119,7 @@ class AnalyzerStorage(Module, AutoCSR):
         self.wait = CSRStatus()
         self.run  = CSRStatus()
 
+        self.mem_flush = CSR()
         self.mem_valid = CSRStatus()
         self.mem_ready = CSR()
         self.mem_data = CSRStatus(dw)
@@ -126,7 +127,8 @@ class AnalyzerStorage(Module, AutoCSR):
         # # #
 
         mem = stream.SyncFIFO([("data", dw)], depth//cd_ratio, buffered=True)
-        self.submodules += mem
+        self.submodules += ResetInserter()(mem)
+        self.comb += mem.reset.eq(self.mem_flush.re)
 
         fsm = FSM(reset_state="IDLE")
         self.submodules += fsm

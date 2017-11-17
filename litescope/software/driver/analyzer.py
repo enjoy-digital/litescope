@@ -74,8 +74,7 @@ class LiteScopeAnalyzerDriver:
         self.frontend_subsampler_value.write(value-1)
 
     def run(self, offset, length):
-        while self.storage_mem_valid.read():
-            self.storage_mem_ready.write(1)
+        self.storage_mem_flush.write(1)
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
