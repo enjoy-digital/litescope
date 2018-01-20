@@ -7,11 +7,27 @@ from litex.soc.interconnect.csr import *
 from litex.soc.cores.gpio import GPIOInOut
 from litex.soc.interconnect import stream
 
+
+class LiteScopeIO(Module, AutoCSR):
+    def __init__(self, dw):
+        self.dw = dw
+        self.input = Signal(dw)
+        self.output = Signal(dw)
+
+        # # #
+
+        self.submodules.gpio = GPIOInOut(self.input, self.output)
+
+    def get_csrs(self):
+        return self.gpio.get_csrs()
+
+
 def core_layout(dw, hw=1):
     return [("data", dw), ("hit", hw)]
 
+
 class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw, cd):
+    def __init__(self, dw):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw))
 
@@ -23,8 +39,8 @@ class FrontendTrigger(Module, AutoCSR):
         value = Signal(dw)
         mask = Signal(dw)
         self.specials += [
-            MultiReg(self.value.storage, value, cd),
-            MultiReg(self.mask.storage, mask, cd)
+            MultiReg(self.value.storage, value),
+            MultiReg(self.mask.storage, mask)
         ]
 
         self.comb += [
@@ -34,7 +50,7 @@ class FrontendTrigger(Module, AutoCSR):
 
 
 class FrontendSubSampler(Module, AutoCSR):
-    def __init__(self, dw, cd):
+    def __init__(self, dw):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw))
 
@@ -42,15 +58,13 @@ class FrontendSubSampler(Module, AutoCSR):
 
         # # #
 
-        sync_cd = getattr(self.sync, cd)
-
         value = Signal(16)
-        self.specials += MultiReg(self.value.storage, value, cd)
+        self.specials += MultiReg(self.value.storage, value)
 
         counter = Signal(16)
         done = Signal()
 
-        sync_cd += \
+        self.sync += \
             If(self.source.ready,
                 If(done,
                     counter.eq(0)
@@ -82,29 +96,28 @@ class AnalyzerMux(Module, AutoCSR):
 
 
 class AnalyzerFrontend(Module, AutoCSR):
-    def __init__(self, dw, cd, cd_ratio):
+    def __init__(self, dw, cd_ratio):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw*cd_ratio))
 
         # # #
 
-        self.submodules.buffer = ClockDomainsRenamer(cd)(stream.Buffer(core_layout(dw)))
-        self.submodules.trigger = FrontendTrigger(dw, cd)
-        self.submodules.subsampler = FrontendSubSampler(dw, cd)
-        self.submodules.converter = ClockDomainsRenamer(cd)(
-                                        stream.StrideConverter(
-                                            core_layout(dw, 1),
-                                            core_layout(dw*cd_ratio, cd_ratio)))
-        self.submodules.fifo = ClockDomainsRenamer({"write": cd, "read": "sys"})(
-                                   stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio), 8))
-
-        self.submodules.pipeline = stream.Pipeline(self.sink,
-                                                   self.buffer,
-                                                   self.trigger,
-                                                   self.subsampler,
-                                                   self.converter,
-                                                   self.fifo,
-                                                   self.source)
+        self.submodules.buffer = stream.Buffer(core_layout(dw))
+        self.submodules.trigger = FrontendTrigger(dw)
+        self.submodules.subsampler = FrontendSubSampler(dw)
+        self.submodules.converter = stream.StrideConverter(
+                core_layout(dw, 1), core_layout(dw*cd_ratio, cd_ratio))
+        self.submodules.fifo = ClockDomainsRenamer(
+            {"write": "sys", "read": "new_sys"})(
+                stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio), 8))
+        self.submodules.pipeline = stream.Pipeline(
+            self.sink,
+            self.buffer,
+            self.trigger,
+            self.subsampler,
+            self.converter,
+            self.fifo,
+            self.source)
 
 
 class AnalyzerStorage(Module, AutoCSR):
@@ -163,20 +176,6 @@ class AnalyzerStorage(Module, AutoCSR):
         ]
 
 
-class LiteScopeIO(Module, AutoCSR):
-    def __init__(self, dw):
-        self.dw = dw
-        self.input = Signal(dw)
-        self.output = Signal(dw)
-
-        # # #
-
-        self.submodules.gpio = GPIOInOut(self.input, self.output)
-
-    def get_csrs(self):
-        return self.gpio.get_csrs()
-
-
 def _format_groups(groups):
     if not isinstance(groups, dict):
         groups = {0 : groups}
@@ -211,7 +210,8 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].valid.eq(1),
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
-        self.submodules.frontend = AnalyzerFrontend(self.dw, cd, cd_ratio)
+        self.submodules.frontend = ClockDomainsRenamer(
+            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio))
         self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio)
         self.comb += [
             self.mux.source.connect(self.frontend.sink),
