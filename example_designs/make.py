@@ -123,16 +123,16 @@ if __name__ == "__main__":
 ====== Building parameters: ======""")
 if hasattr(soc, "io"):
     print("""
-LiscopeIO
----------
+LiteScopeIO
+-----------
 Width: {}
 """.format(soc.io.dw)
 )
 
 if hasattr(soc, "analyzer"):
     print("""
-LiscopeAnalyzer
----------
+LiteScopeAnalyzer
+-----------------
 Width: {}
 Depth: {}
 ===============================""".format(
