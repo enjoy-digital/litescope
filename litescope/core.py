@@ -1,5 +1,5 @@
-from litex.gen import *
-from litex.gen.genlib.cdc import MultiReg
+from migen import *
+from migen.genlib.cdc import MultiReg
 
 from litex.build.tools import write_to_file
 

@@ -1,5 +1,5 @@
-from litex.gen import *
-from litex.gen.genlib.io import CRG
+from migen import *
+from migen.genlib.io import CRG
 
 from targets import *
 

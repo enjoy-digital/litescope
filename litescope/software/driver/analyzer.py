@@ -1,7 +1,8 @@
 import os
 import sys
 
-from litex.gen.fhdl.structure import *
+from migen.fhdl.structure import *
+
 from litescope.software.dump.common import *
 from litescope.software.dump import *
 
