@@ -42,9 +42,9 @@ class EdgeDetect(Module):
 
 
 class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw, edges=False, hitcountbits=0):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw))
+    def __init__(self, dw, edges=False, hitcountbits=0, triggers=1, trigger_num=0):
+        self.sink = stream.Endpoint(core_layout(dw, triggers))
+        self.source = stream.Endpoint(core_layout(dw, triggers))
 
         self.value = CSRStorage(dw)
         self.mask = CSRStorage(dw)
@@ -85,6 +85,8 @@ class FrontendTrigger(Module, AutoCSR):
             if hitcountbits > 0:
                 hit_count = Signal(hitcountbits)
                 self.specials += MultiReg(self.hit_count.storage, hit_count)
+                hit_reset = Signal()
+                self.specials += MultiReg(self.hit_reset, hit_reset)
                 hit_counter = Signal(hitcountbits)
 
         self.comb += self.sink.connect(self.source)
@@ -99,10 +101,10 @@ class FrontendTrigger(Module, AutoCSR):
                    ),
                 ]
             if hitcountbits == 0:
-                self.comb += self.source.hit.eq(hit_masked != 0)
+                self.comb += self.source.hit[trigger_num].eq(hit_masked != 0)
             else:
                 self.sync += [
-                    If(self.hit_reset,
+                    If(hit_reset,
                        hit_counter.eq(0)
                        ).Elif( (hit_masked != 0) & (hit_counter < ((1 << hitcountbits)-1)),
                               hit_counter.eq(hit_counter + 1)
@@ -110,9 +112,9 @@ class FrontendTrigger(Module, AutoCSR):
                 ]
                 self.comb += [
                     If(hit_counter == hit_count,
-                       self.source.hit.eq(1)
+                       self.source.hit[trigger_num].eq(1)
                        ).Else(
-                        self.source.hit.eq(0)
+                        self.source.hit[trigger_num].eq(0)
                     )
                 ]
         else:
@@ -167,21 +169,19 @@ class AnalyzerMux(Module, AutoCSR):
 
 class AnalyzerFrontend(Module, AutoCSR):
     def __init__(self, dw, cd_ratio, edges=False, triggers=1, hitcountbits=0):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw*cd_ratio))
+        self.sink = stream.Endpoint(core_layout(dw, triggers))
+        self.source = stream.Endpoint(core_layout(dw*cd_ratio, triggers))
 
         # # #
 
-        self.submodules.buffer = stream.Buffer(core_layout(dw))
+        self.submodules.buffer = stream.Buffer(core_layout(dw, triggers))
         self.submodules.trigger = FrontendTrigger(dw, edges, hitcountbits)
-        if triggers == 2:
-            self.submodules.trigger2 = FrontendTrigger(dw, edges, hitcountbits)
         self.submodules.subsampler = FrontendSubSampler(dw)
         self.submodules.converter = stream.StrideConverter(
-                core_layout(dw, 1), core_layout(dw*cd_ratio, cd_ratio))
+                core_layout(dw, 1 * triggers), core_layout(dw*cd_ratio, cd_ratio * triggers))
         self.submodules.fifo = ClockDomainsRenamer(
             {"write": "sys", "read": "new_sys"})(
-                stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio), 8))
+                stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio * triggers), 8))
         self.submodules.pipeline = stream.Pipeline(
             self.sink,
             self.buffer,
@@ -191,10 +191,17 @@ class AnalyzerFrontend(Module, AutoCSR):
             self.fifo,
             self.source)
 
+        if triggers == 2:
+            self.submodules.trigger2 = FrontendTrigger(dw, edges=edges, hitcountbits=hitcountbits, trigger_num=1)
+            self.comb += [
+                self.trigger2.sink.eq(self.buffer.source),  # tap the buffer and compute triggers
+                self.trigger.source.hit[1].eq(self.trigger2.source.hit[1])  # map 2nd trigger output back into the main flow
+                ]
+
 
 class AnalyzerStorage(Module, AutoCSR):
     def __init__(self, dw, depth, cd_ratio, triggers=1):
-        self.sink = stream.Endpoint(core_layout(dw, cd_ratio))
+        self.sink = stream.Endpoint(core_layout(dw, cd_ratio * triggers))
 
         self.start = CSR()
         self.restart = CSR()
@@ -203,6 +210,8 @@ class AnalyzerStorage(Module, AutoCSR):
 
         self.idle = CSRStatus()
         self.wait = CSRStatus()
+        if triggers == 2:
+            self.wait2 = CSRStatus()
         self.run  = CSRStatus()
         self.readout = CSRStatus()
 
@@ -231,17 +240,36 @@ class AnalyzerStorage(Module, AutoCSR):
             # after every word is read, litex_server drops a 1 in mem_ready, which causes .re and .r to become true
             # .re is true for just one pulse, so this increments through the read pointer
         )
-        fsm.act("WAIT",
-            self.wait.status.eq(1),
-            self.sink.connect(mem.sink, omit=set(["hit"])),
-            If(self.sink.valid & (self.sink.hit != 0),
-                NextState("RUN")
-            ),
-            mem.source.ready.eq(mem.level >= self.offset.storage)
-            # in the wait state: 1) fill the FIFO until we hit the offset level
-            # 2) once we've hit the offset level, if we go over it, read a value out
-            # this keeps the FIFO "spinning" until the trigger is hit
-        )
+        if triggers == 1:
+            fsm.act("WAIT",
+                self.wait.status.eq(1),
+                self.sink.connect(mem.sink, omit=set(["hit"])),
+                If(self.sink.valid & (self.sink.hit[0] != 0),
+                    NextState("RUN")
+                ),
+                mem.source.ready.eq(mem.level >= self.offset.storage)
+                # in the wait state: 1) fill the FIFO until we hit the offset level
+                # 2) once we've hit the offset level, if we go over it, read a value out
+                # this keeps the FIFO "spinning" until the trigger is hit
+            )
+        else:
+            fsm.act("WAIT",
+                self.wait.status.eq(1),
+                self.sink.connect(mem.sink, omit=set(["hit"])),
+                If(self.sink.valid & (self.sink.hit[0] != 0),
+                    NextState("WAIT2")
+                ),
+                mem.source.ready.eq(mem.level >= self.offset.storage)
+            )
+            fsm.act("WAIT2",
+                self.wait2.status.eq(1),
+                self.sink.connect(mem.sink, omit=set(["hit"])),
+                If(self.sink.valid & (self.sink.hit[1] != 0),
+                    NextState("RUN")
+                ),
+                mem.source.ready.eq(mem.level >= self.offset.storage)
+            )
+
         fsm.act("RUN",
             self.run.status.eq(1),
             self.sink.connect(mem.sink, omit=set(["hit"])),
@@ -290,6 +318,10 @@ def _format_groups(groups):
 
 class LiteScopeAnalyzer(Module, AutoCSR):
     def __init__(self, groups, depth, cd="sys", cd_ratio=1, edges=False, triggers=1, hitcountbits=0):
+        assert triggers <= 2  # only support 1 or 2 triggers for now
+        if triggers == 2:
+            assert hitcountbits > 0  # need to have a hit counter if we're also doing multiple triggers
+
         self.groups = _format_groups(groups)
         self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
 
@@ -309,8 +341,14 @@ class LiteScopeAnalyzer(Module, AutoCSR):
         self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio, triggers)
         self.comb += [
             self.mux.source.connect(self.frontend.sink),
-            self.frontend.source.connect(self.storage.sink)
+            self.frontend.source.connect(self.storage.sink),
         ]
+        if hitcountbits > 0:
+            self.comb += self.frontend.trigger.hit_reset.eq(self.storage.start.re)  # reset the hit count when analyzer is started
+            if triggers == 2:
+                self.comb += self.frontend.trigger2.hit_reset.eq(self.storage.wait) # reset trigger2's hit count while trigger 1 is pending
+
+
 
     def export_csv(self, vns, filename):
         def format_line(*args):

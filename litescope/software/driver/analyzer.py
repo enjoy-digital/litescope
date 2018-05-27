@@ -94,6 +94,7 @@ class LiteScopeAnalyzerDriver:
                   "storage_readout",
                   "storage_wait",
                   "storage_run",
+                  "frontend_trigger_hit_count",
                   ]
         for i in attrs:
             print(i, format(getattr(self, i).read(), '02x'))
