@@ -78,6 +78,8 @@ class LiteScopeAnalyzerDriver:
         m = getattr(self, "frontend_trigger_edge_enable")
         m.write(mask)
 
+    # the check function can be called to confirm that
+    # the analyzer values are all configured correctly
     def check(self):
         attrs = [ "frontend_subsampler_value",
                   "mux_value",
@@ -97,7 +99,8 @@ class LiteScopeAnalyzerDriver:
                   "frontend_trigger_edge_enable",
                   ]
         for i in setup:
-            print("set bits in ", i)
+            print("bits set in", i, ": ")
+            bitset = 0
             val = getattr(self, i).read()
             for signals in self.layouts.values():
                 value = 0
@@ -105,7 +108,10 @@ class LiteScopeAnalyzerDriver:
                     mask = (2**length-1) << value
                     value += length
                     if val & mask != 0:
-                        print(name, ": ", format(val >> (value - 1), '0x'))
+                        print("  ", name, ": ", format(val >> (value - 1), '0x'))
+                        bitset = 1
+            if bitset == 0:
+                print("   No bits set")
 
         
     def configure_subsampler(self, value):
@@ -121,7 +127,6 @@ class LiteScopeAnalyzerDriver:
 
     def done(self):
         return self.storage_readout.read()
-#        return self.storage_idle.read()
 
     def wait_done(self):
         while not self.done():

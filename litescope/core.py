@@ -55,7 +55,6 @@ class FrontendTrigger(Module, AutoCSR):
         # and the "mask" field selects if the level matters or not
         if edges:
             self.edge_enable = CSRStorage(dw)
-#            self.edge_type = CSRStorage(dw) # eliminate this register, replace with "value" to save resources
 
         # # #
 
@@ -68,14 +67,11 @@ class FrontendTrigger(Module, AutoCSR):
         ]
         if edges:
             edge_enable = Signal(dw)
-#            edge_type = Signal(dw)
             self.specials += [
                 MultiReg(self.edge_enable.storage, edge_enable),
-#                MultiReg(self.edge_type.storage, edge_type),
             ]
             edge_hit = Signal(dw)
             for i in range(0, dw):
-#                ed_bit = EdgeDetect(edge_type[i])
                 ed_bit = EdgeDetect(value[i])
                 self.submodules += ed_bit
                 self.comb += [
@@ -231,12 +227,14 @@ class AnalyzerStorage(Module, AutoCSR):
                # IDLE state no more words are read out.
             )
         )
+        # added a "READOUT" state, in order to send feedback that in fact a trigger
+        # was hit and data was fetched prior to idling
         fsm.act("READOUT",
                 self.readout.status.eq(1),
                 If(self.restart.re,
                    NextState("IDLE")
                    ),
-                self.sink.ready.eq(1),
+                self.sink.ready.eq(0),
                 mem.source.ready.eq(self.mem_ready.re & self.mem_ready.r)
 
                 )
