@@ -86,17 +86,15 @@ class FrontendTrigger(Module, AutoCSR):
         self.comb += self.sink.connect(self.source)
         if edges:
             hit_masked = Signal(dw)
-            hit_reduced = Signal()
             for i in range(0, dw):
                 self.comb += [
                    If(edge_enable[i],
                       hit_masked[i].eq(edge_hit[i] & mask[i])
                    ).Else(
-                      hit_masked[i].eq((self.sink.data[i] & mask[i]) == value[i])
+                      hit_masked[i].eq((self.sink.data[i] == value[i]) & mask[i])
                    ),
-                   hit_reduced.eq(hit_reduced | hit_masked[i])
                 ]
-            self.comb += self.source.hit.eq(hit_reduced)
+            self.comb += self.source.hit.eq(hit_masked != 0)
         else:
             self.comb += self.source.hit.eq((self.sink.data & mask) == value)
 
@@ -177,12 +175,14 @@ class AnalyzerStorage(Module, AutoCSR):
         self.sink = stream.Endpoint(core_layout(dw, cd_ratio))
 
         self.start = CSR()
+        self.restart = CSR()
         self.length = CSRStorage(bits_for(depth))
         self.offset = CSRStorage(bits_for(depth))
 
         self.idle = CSRStatus()
         self.wait = CSRStatus()
         self.run  = CSRStatus()
+        self.readout = CSRStatus()
 
         self.mem_flush = CSR()
         self.mem_valid = CSRStatus()
@@ -224,13 +224,22 @@ class AnalyzerStorage(Module, AutoCSR):
             self.run.status.eq(1),
             self.sink.connect(mem.sink, omit=set(["hit"])),
             If(~mem.sink.ready | (mem.level >= self.length.storage),
-                NextState("IDLE"),
+                NextState("READOUT"),
                 mem.source.ready.eq(1)
                # i'm not sure why this happens, but the way I read it is this will cause
                # a word to be read out of the FIFO immediately, but then as we enter the
                # IDLE state no more words are read out.
             )
         )
+        fsm.act("READOUT",
+                self.readout.status.eq(1),
+                If(self.restart.re,
+                   NextState("IDLE")
+                   ),
+                self.sink.ready.eq(1),
+                mem.source.ready.eq(self.mem_ready.re & self.mem_ready.r)
+
+                )
         self.comb += [
             self.mem_valid.status.eq(mem.source.valid),
             self.mem_data.status.eq(mem.source.data)

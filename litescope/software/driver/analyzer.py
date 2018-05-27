@@ -71,6 +71,43 @@ class LiteScopeAnalyzerDriver:
         t.write(value)
         m.write(mask)
 
+    def configure_edges(self, mask=0, cond=None):
+        if cond is not None:
+            for k in cond:
+                mask |= getattr(self, k + "_m")
+        m = getattr(self, "frontend_trigger_edge_enable")
+        m.write(mask)
+
+    def check(self):
+        attrs = [ "frontend_subsampler_value",
+                  "mux_value",
+                  "storage_start",
+                  "storage_length",
+                  "storage_offset",
+                  "storage_idle",
+                  "storage_readout",
+                  "storage_wait",
+                  "storage_run",
+                  ]
+        for i in attrs:
+            print(i, format(getattr(self, i).read(), '02x'))
+
+        setup = [ "frontend_trigger_value",
+                  "frontend_trigger_mask",
+                  "frontend_trigger_edge_enable",
+                  ]
+        for i in setup:
+            print("set bits in ", i)
+            val = getattr(self, i).read()
+            for signals in self.layouts.values():
+                value = 0
+                for name, length in signals:
+                    mask = (2**length-1) << value
+                    value += length
+                    if val & mask != 0:
+                        print(name, ": ", format(val >> (value - 1), '0x'))
+
+        
     def configure_subsampler(self, value):
         self.frontend_subsampler_value.write(value-1)
 
@@ -83,7 +120,8 @@ class LiteScopeAnalyzerDriver:
         self.storage_start.write(1)
 
     def done(self):
-        return self.storage_idle.read()
+        return self.storage_readout.read()
+#        return self.storage_idle.read()
 
     def wait_done(self):
         while not self.done():
@@ -109,6 +147,8 @@ class LiteScopeAnalyzerDriver:
                 for i in range(self.cd_ratio):
                     new_data.append(*get_bits([data], i*self.dw, (i+1)*self.dw))
             self.data = new_data
+            
+        self.storage_restart.write(1)
         return self.data
 
     def save(self, filename, samplerate=None):
