@@ -25,28 +25,80 @@ class LiteScopeIO(Module, AutoCSR):
 def core_layout(dw, hw=1):
     return [("data", dw), ("hit", hw)]
 
+# produces a pulse on the rising edge of sink
+# when neg=1, produce a pulse on falling edge of sink
+class EdgeDetect(Module):
+    def __init__(self, falling=0):
+        self.sink = sink = Signal()
+        sink_r = Signal()
+        self.source = source = Signal()
+
+        self.sync += [
+            sink_r.eq(sink)
+        ]
+        self.comb += [
+            source.eq(~(sink_r ^ falling) & (sink ^ falling))
+        ]
+
 
 class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw):
+    def __init__(self, dw, edges=False):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw))
 
         self.value = CSRStorage(dw)
         self.mask = CSRStorage(dw)
 
+        # API: if a bit has edge_enable, then the "value" field selects the edge type (0 = pos, 1 = neg)
+        # and the "mask" field selects if the edge matters or not
+        # if the edge_enable bit is not set, then the "value" field selects the value to look for as a match,
+        # and the "mask" field selects if the level matters or not
+        if edges:
+            self.edge_enable = CSRStorage(dw)
+#            self.edge_type = CSRStorage(dw) # eliminate this register, replace with "value" to save resources
+
         # # #
 
         value = Signal(dw)
         mask = Signal(dw)
+
         self.specials += [
             MultiReg(self.value.storage, value),
             MultiReg(self.mask.storage, mask)
         ]
+        if edges:
+            edge_enable = Signal(dw)
+#            edge_type = Signal(dw)
+            self.specials += [
+                MultiReg(self.edge_enable.storage, edge_enable),
+#                MultiReg(self.edge_type.storage, edge_type),
+            ]
+            edge_hit = Signal(dw)
+            for i in range(0, dw):
+#                ed_bit = EdgeDetect(edge_type[i])
+                ed_bit = EdgeDetect(value[i])
+                self.submodules += ed_bit
+                self.comb += [
+                    ed_bit.sink.eq(self.sink.data[i]),
+                    edge_hit[i].eq(ed_bit.source),
+                ]
 
-        self.comb += [
-            self.sink.connect(self.source),
-            self.source.hit.eq((self.sink.data & mask) == value)
-        ]
+        self.comb += self.sink.connect(self.source)
+        if edges:
+            hit_masked = Signal(dw)
+            hit_reduced = Signal()
+            for i in range(0, dw):
+                self.comb += [
+                   If(edge_enable[i],
+                      hit_masked[i].eq(edge_hit[i] & mask[i])
+                   ).Else(
+                      hit_masked[i].eq((self.sink.data[i] & mask[i]) == value[i])
+                   ),
+                   hit_reduced.eq(hit_reduced | hit_masked[i])
+                ]
+            self.comb += self.source.hit.eq(hit_reduced)
+        else:
+            self.comb += self.source.hit.eq((self.sink.data & mask) == value)
 
 
 class FrontendSubSampler(Module, AutoCSR):
@@ -96,14 +148,14 @@ class AnalyzerMux(Module, AutoCSR):
 
 
 class AnalyzerFrontend(Module, AutoCSR):
-    def __init__(self, dw, cd_ratio):
+    def __init__(self, dw, cd_ratio, edges=False):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw*cd_ratio))
 
         # # #
 
         self.submodules.buffer = stream.Buffer(core_layout(dw))
-        self.submodules.trigger = FrontendTrigger(dw)
+        self.submodules.trigger = FrontendTrigger(dw, edges)
         self.submodules.subsampler = FrontendSubSampler(dw)
         self.submodules.converter = stream.StrideConverter(
                 core_layout(dw, 1), core_layout(dw*cd_ratio, cd_ratio))
@@ -153,6 +205,9 @@ class AnalyzerStorage(Module, AutoCSR):
             ),
             self.sink.ready.eq(1),
             mem.source.ready.eq(self.mem_ready.re & self.mem_ready.r)
+            # readout happens in the IDLE state
+            # after every word is read, litex_server drops a 1 in mem_ready, which causes .re and .r to become true
+            # .re is true for just one pulse, so this increments through the read pointer
         )
         fsm.act("WAIT",
             self.wait.status.eq(1),
@@ -161,6 +216,9 @@ class AnalyzerStorage(Module, AutoCSR):
                 NextState("RUN")
             ),
             mem.source.ready.eq(mem.level >= self.offset.storage)
+            # in the wait state: 1) fill the FIFO until we hit the offset level
+            # 2) once we've hit the offset level, if we go over it, read a value out
+            # this keeps the FIFO "spinning" until the trigger is hit
         )
         fsm.act("RUN",
             self.run.status.eq(1),
@@ -168,6 +226,9 @@ class AnalyzerStorage(Module, AutoCSR):
             If(~mem.sink.ready | (mem.level >= self.length.storage),
                 NextState("IDLE"),
                 mem.source.ready.eq(1)
+               # i'm not sure why this happens, but the way I read it is this will cause
+               # a word to be read out of the FIFO immediately, but then as we enter the
+               # IDLE state no more words are read out.
             )
         )
         self.comb += [
@@ -195,7 +256,7 @@ def _format_groups(groups):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, cd="sys", cd_ratio=1):
+    def __init__(self, groups, depth, cd="sys", cd_ratio=1, edges=False):
         self.groups = _format_groups(groups)
         self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
 
@@ -211,7 +272,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
         self.submodules.frontend = ClockDomainsRenamer(
-            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio))
+            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio, edges))
         self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio)
         self.comb += [
             self.mux.source.connect(self.frontend.sink),
