@@ -234,7 +234,7 @@ class AnalyzerStorage(Module, AutoCSR):
                 If(self.restart.re,
                    NextState("IDLE")
                    ),
-                self.sink.ready.eq(0),
+                self.sink.ready.eq(0), # block the pipe during readout
                 mem.source.ready.eq(self.mem_ready.re & self.mem_ready.r)
 
                 )
