@@ -42,7 +42,7 @@ class EdgeDetect(Module):
 
 
 class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw, edges=False):
+    def __init__(self, dw, edges=False, hitcountbits=0):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw))
 
@@ -55,6 +55,9 @@ class FrontendTrigger(Module, AutoCSR):
         # and the "mask" field selects if the level matters or not
         if edges:
             self.edge_enable = CSRStorage(dw)
+            if hitcountbits > 0:
+                self.hit_count = CSRStorage(hitcountbits)
+                self.hit_reset = Signal()
 
         # # #
 
@@ -79,6 +82,11 @@ class FrontendTrigger(Module, AutoCSR):
                     edge_hit[i].eq(ed_bit.source),
                 ]
 
+            if hitcountbits > 0:
+                hit_count = Signal(hitcountbits)
+                self.specials += MultiReg(self.hit_count.storage, hit_count)
+                hit_counter = Signal(hitcountbits)
+
         self.comb += self.sink.connect(self.source)
         if edges:
             hit_masked = Signal(dw)
@@ -90,7 +98,23 @@ class FrontendTrigger(Module, AutoCSR):
                       hit_masked[i].eq((self.sink.data[i] == value[i]) & mask[i])
                    ),
                 ]
-            self.comb += self.source.hit.eq(hit_masked != 0)
+            if hitcountbits == 0:
+                self.comb += self.source.hit.eq(hit_masked != 0)
+            else:
+                self.sync += [
+                    If(self.hit_reset,
+                       hit_counter.eq(0)
+                       ).Elif( (hit_masked != 0) & (hit_counter < ((1 << hitcountbits)-1)),
+                              hit_counter.eq(hit_counter + 1)
+                       )
+                ]
+                self.comb += [
+                    If(hit_counter == hit_count,
+                       self.source.hit.eq(1)
+                       ).Else(
+                        self.source.hit.eq(0)
+                    )
+                ]
         else:
             self.comb += self.source.hit.eq((self.sink.data & mask) == value)
 
@@ -142,14 +166,16 @@ class AnalyzerMux(Module, AutoCSR):
 
 
 class AnalyzerFrontend(Module, AutoCSR):
-    def __init__(self, dw, cd_ratio, edges=False):
+    def __init__(self, dw, cd_ratio, edges=False, triggers=1, hitcountbits=0):
         self.sink = stream.Endpoint(core_layout(dw))
         self.source = stream.Endpoint(core_layout(dw*cd_ratio))
 
         # # #
 
         self.submodules.buffer = stream.Buffer(core_layout(dw))
-        self.submodules.trigger = FrontendTrigger(dw, edges)
+        self.submodules.trigger = FrontendTrigger(dw, edges, hitcountbits)
+        if triggers == 2:
+            self.submodules.trigger2 = FrontendTrigger(dw, edges, hitcountbits)
         self.submodules.subsampler = FrontendSubSampler(dw)
         self.submodules.converter = stream.StrideConverter(
                 core_layout(dw, 1), core_layout(dw*cd_ratio, cd_ratio))
@@ -167,7 +193,7 @@ class AnalyzerFrontend(Module, AutoCSR):
 
 
 class AnalyzerStorage(Module, AutoCSR):
-    def __init__(self, dw, depth, cd_ratio):
+    def __init__(self, dw, depth, cd_ratio, triggers=1):
         self.sink = stream.Endpoint(core_layout(dw, cd_ratio))
 
         self.start = CSR()
@@ -263,7 +289,7 @@ def _format_groups(groups):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, cd="sys", cd_ratio=1, edges=False):
+    def __init__(self, groups, depth, cd="sys", cd_ratio=1, edges=False, triggers=1, hitcountbits=0):
         self.groups = _format_groups(groups)
         self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
 
@@ -279,8 +305,8 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
         self.submodules.frontend = ClockDomainsRenamer(
-            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio, edges))
-        self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio)
+            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio, edges, triggers, hitcountbits))
+        self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio, triggers)
         self.comb += [
             self.mux.source.connect(self.frontend.sink),
             self.frontend.source.connect(self.storage.sink)

@@ -71,6 +71,10 @@ class LiteScopeAnalyzerDriver:
         t.write(value)
         m.write(mask)
 
+    def configure_hitcount(self, hitcount):
+        r = getattr(self, "frontend_trigger_hit_count")
+        r.write(hitcount)
+        
     def configure_edges(self, mask=0, cond=None):
         if cond is not None:
             for k in cond:
