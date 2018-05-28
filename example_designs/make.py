@@ -126,7 +126,7 @@ if hasattr(soc, "io"):
 LiteScopeIO
 -----------
 Width: {}
-""".format(soc.io.dw)
+""".format(soc.io.data_width)
 )
 
 if hasattr(soc, "analyzer"):
@@ -136,7 +136,7 @@ LiteScopeAnalyzer
 Width: {}
 Depth: {}
 ===============================""".format(
-    soc.analyzer.dw,
+    soc.analyzer.data_width,
     soc.analyzer.depth
     )
 )

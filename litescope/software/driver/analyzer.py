@@ -21,10 +21,10 @@ class LiteScopeAnalyzerDriver:
         self.get_layouts()
         self.build()
         self.group = 0
-        self.data = DumpData(self.dw)
+        self.data = DumpData(self.data_width)
 
-        # disable frontend and storage
-        self.frontend_trigger_enable.write(0)
+        # disable trigger and storage
+        self.trigger_enable.write(0)
         self.storage_enable.write(0)
 
     def get_config(self):
@@ -66,15 +66,15 @@ class LiteScopeAnalyzerDriver:
         self.mux_value.write(value)
 
     def add_trigger(self, value=0, mask=0, cond=None):
-        if self.frontend_trigger_mem_full.read():
+        if self.trigger_mem_full.read():
             raise ValueError("Trigger memory full, too much conditions")
         if cond is not None:
             for k, v in cond.items():
                 value |= getattr(self, k + "_o")*v
                 mask |= getattr(self, k + "_m")
-        self.frontend_trigger_mem_mask.write(mask)
-        self.frontend_trigger_mem_value.write(value)
-        self.frontend_trigger_mem_write.write(1)
+        self.trigger_mem_mask.write(mask)
+        self.trigger_mem_value.write(value)
+        self.trigger_mem_write.write(1)
 
     def add_rising_edge_trigger(self, name):
         self.add_trigger(getattr(self, name + "_o")*0, getattr(self, name + "_m"))
@@ -88,7 +88,7 @@ class LiteScopeAnalyzerDriver:
         self.add_trigger(value, mask, cond)
 
     def configure_subsampler(self, value):
-        self.frontend_subsampler_value.write(value-1)
+        self.subsampler_value.write(value-1)
 
     def run(self, offset, length):
         if self.debug:
@@ -96,7 +96,7 @@ class LiteScopeAnalyzerDriver:
         self.storage_offset.write(offset)
         self.storage_length.write(length)
         self.storage_enable.write(1)
-        self.frontend_trigger_enable.write(1)
+        self.trigger_enable.write(1)
 
     def done(self):
         return self.storage_done.read()

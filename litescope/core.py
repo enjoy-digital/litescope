@@ -10,10 +10,10 @@ from litex.soc.interconnect import stream
 
 
 class LiteScopeIO(Module, AutoCSR):
-    def __init__(self, dw):
-        self.dw = dw
-        self.input = Signal(dw)
-        self.output = Signal(dw)
+    def __init__(self, data_width):
+        self.data_width = data_width
+        self.input = Signal(data_width)
+        self.output = Signal(data_width)
 
         # # #
 
@@ -23,21 +23,21 @@ class LiteScopeIO(Module, AutoCSR):
         return self.gpio.get_csrs()
 
 
-def core_layout(dw):
-    return [("data", dw), ("hit", 1)]
+def core_layout(data_width):
+    return [("data", data_width), ("hit", 1)]
 
 
-class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw, depth=16):
-        self.sink = sink = stream.Endpoint(core_layout(dw))
-        self.source = source = stream.Endpoint(core_layout(dw))
+class _Trigger(Module, AutoCSR):
+    def __init__(self, data_width, depth=16):
+        self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.enable = CSRStorage()
         self.done = CSRStatus()
 
         self.mem_write = CSR()
-        self.mem_mask = CSRStorage(dw)
-        self.mem_value = CSRStorage(dw)
+        self.mem_mask = CSRStorage(data_width)
+        self.mem_value = CSRStorage(data_width)
         self.mem_full = CSRStatus()
 
         # # #
@@ -53,7 +53,7 @@ class FrontendTrigger(Module, AutoCSR):
         self.specials += MultiReg(done, self.done.status)
 
         # memory and configuration
-        mem = stream.AsyncFIFO([("mask", dw), ("value", dw)], depth)
+        mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth)
         mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
         self.submodules += mem
         self.comb += [
@@ -82,10 +82,10 @@ class FrontendTrigger(Module, AutoCSR):
         ]
 
 
-class FrontendSubSampler(Module, AutoCSR):
-    def __init__(self, dw):
-        self.sink = sink = stream.Endpoint(core_layout(dw))
-        self.source = source = stream.Endpoint(core_layout(dw))
+class _SubSampler(Module, AutoCSR):
+    def __init__(self, data_width):
+        self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.value = CSRStorage(16)
 
@@ -113,10 +113,10 @@ class FrontendSubSampler(Module, AutoCSR):
         ]
 
 
-class AnalyzerMux(Module, AutoCSR):
-    def __init__(self, dw, n):
-        self.sinks = sinks = [stream.Endpoint(core_layout(dw)) for i in range(n)]
-        self.source = source = stream.Endpoint(core_layout(dw))
+class _Mux(Module, AutoCSR):
+    def __init__(self, data_width, n):
+        self.sinks = sinks = [stream.Endpoint(core_layout(data_width)) for i in range(n)]
+        self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.value = CSRStorage(bits_for(n))
 
@@ -131,25 +131,9 @@ class AnalyzerMux(Module, AutoCSR):
         self.comb += Case(value, cases)
 
 
-class AnalyzerFrontend(Module, AutoCSR):
-    def __init__(self, dw):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw))
-
-        # # #
-
-        self.submodules.trigger = FrontendTrigger(dw)
-        self.submodules.subsampler = FrontendSubSampler(dw)
-        self.submodules.pipeline = stream.Pipeline(
-            self.sink,
-            self.trigger,
-            self.subsampler,
-            self.source)
-
-
-class AnalyzerStorage(Module, AutoCSR):
-    def __init__(self, dw, depth):
-        self.sink = sink = stream.Endpoint(core_layout(dw))
+class _Storage(Module, AutoCSR):
+    def __init__(self, data_width, depth):
+        self.sink = sink = stream.Endpoint(core_layout(data_width))
 
         self.enable = CSRStorage()
         self.done = CSRStatus()
@@ -159,7 +143,7 @@ class AnalyzerStorage(Module, AutoCSR):
 
         self.mem_valid = CSRStatus()
         self.mem_ready = CSR()
-        self.mem_data = CSRStatus(dw)
+        self.mem_data = CSRStatus(data_width)
 
         # # #
 
@@ -185,9 +169,9 @@ class AnalyzerStorage(Module, AutoCSR):
         self.specials += MultiReg(done, self.done.status)
 
         # memory
-        mem = stream.SyncFIFO([("data", dw)], depth, buffered=True)
+        mem = stream.SyncFIFO([("data", data_width)], depth, buffered=True)
         mem = ClockDomainsRenamer("scope")(mem)
-        cdc = stream.AsyncFIFO([("data", dw)], 4)
+        cdc = stream.AsyncFIFO([("data", data_width)], 4)
         cdc = ClockDomainsRenamer(
             {"write": "scope", "read": "sys"})(cdc)
         self.submodules += mem, cdc
@@ -239,56 +223,66 @@ class AnalyzerStorage(Module, AutoCSR):
         ]
 
 
-def _format_groups(groups):
-    if not isinstance(groups, dict):
-        groups = {0 : groups}
-    new_groups = {}
-    for n, signals in groups.items():
-        if not isinstance(signals, list):
-            signals = [signals]
-
-        split_signals = []
-        for s in signals:
-            if isinstance(s, Record):
-                split_signals.extend(s.flatten())
-            else:
-                split_signals.append(s)
-        new_groups[n] = split_signals
-    return new_groups
-
-
 class LiteScopeAnalyzer(Module, AutoCSR):
     def __init__(self, groups, depth, cd="sys"):
-        self.groups = _format_groups(groups)
-        self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
-
+        self.groups = groups = self.format_groups(groups)
         self.depth = depth
+
+        self.data_width = data_width = max([sum([len(s)
+            for s in g]) for g in groups.values()])
 
         # # #
 
+        # create scope clock domain
         self.clock_domains.cd_scope = ClockDomain()
         self.comb += [
             self.cd_scope.clk.eq(ClockSignal(cd)),
             self.cd_scope.rst.eq(ResetSignal(cd))
         ]
 
-        self.submodules.mux = AnalyzerMux(self.dw, len(self.groups))
-        for i, signals in self.groups.items():
+        # mux
+        self.submodules.mux = _Mux(data_width, len(groups))
+        for i, signals in groups.items():
             self.comb += [
                 self.mux.sinks[i].valid.eq(1),
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
-        self.submodules.frontend = AnalyzerFrontend(self.dw)
-        self.submodules.storage = AnalyzerStorage(self.dw, depth)
-        self.comb += [
-            self.mux.source.connect(self.frontend.sink),
-            self.frontend.source.connect(self.storage.sink)
-        ]
+
+        # frontend
+        self.submodules.trigger = _Trigger(data_width)
+        self.submodules.subsampler = _SubSampler(data_width)
+
+        # storage
+        self.submodules.storage = _Storage(data_width, depth)
+
+        # pipeline
+        self.submodules.pipeline = stream.Pipeline(
+            self.mux.source,
+            self.trigger,
+            self.subsampler,
+            self.storage.sink)
+
+    def format_groups(self, groups):
+        if not isinstance(groups, dict):
+            groups = {0 : groups}
+        new_groups = {}
+        for n, signals in groups.items():
+            if not isinstance(signals, list):
+                signals = [signals]
+
+            split_signals = []
+            for s in signals:
+                if isinstance(s, Record):
+                    split_signals.extend(s.flatten())
+                else:
+                    split_signals.append(s)
+            new_groups[n] = split_signals
+        return new_groups
 
     def export_csv(self, vns, filename):
         def format_line(*args):
             return ",".join(args) + "\n"
-        r = format_line("config", "None", "dw", str(self.dw))
+        r = format_line("config", "None", "data_width", str(self.data_width))
         r += format_line("config", "None", "depth", str(self.depth))
         for i, signals in self.groups.items():
             for s in signals:
