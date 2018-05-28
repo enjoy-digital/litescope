@@ -20,7 +20,7 @@ class LiteScopeSoC(SoCCore):
             cpu_type=None,
             csr_data_width=32,
             with_uart=False,
-            ident="Litescope example design",
+            ident="Litescope example design", ident_version=True,
             with_timer=False
         )
         self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))
@@ -35,7 +35,7 @@ class LiteScopeSoC(SoCCore):
                 pass
 
         # use name override to keep naming in capture
-        counter = Signal(4, name_override="counter")
+        counter = Signal(16, name_override="counter")
         counter0 = Signal(name_override="counter0")
         counter1 = Signal(name_override="counter1")
         counter2 = Signal(name_override="counter2")
@@ -47,10 +47,13 @@ class LiteScopeSoC(SoCCore):
             counter2.eq(counter[2]),
             counter3.eq(counter[3]),
         ]
+        zero = Signal()
+        self.comb += zero.eq(counter == 0)
 
         # group for vcd capture
         vcd_group = [
-            counter
+            zero,
+            counter,
         ]
         # group for sigrok capture (no bus support)
         sigrok_group = [

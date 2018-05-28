@@ -13,10 +13,10 @@ dumps = {
 
 for group, filename in dumps.items():
     analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
-    analyzer.configure_trigger()
+    analyzer.configure_trigger(cond={"zero": 1})
     analyzer.configure_subsampler(1)
     analyzer.configure_group(group)
-    analyzer.run(offset=128, length=512)
+    analyzer.run(offset=32, length=128)
     analyzer.wait_done()
     analyzer.upload()
     analyzer.save(filename)
