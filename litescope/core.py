@@ -1,5 +1,6 @@
 from migen import *
-from migen.genlib.cdc import MultiReg
+from migen.genlib.misc import WaitTimer
+from migen.genlib.cdc import MultiReg, PulseSynchronizer
 
 from litex.build.tools import write_to_file
 
@@ -22,14 +23,14 @@ class LiteScopeIO(Module, AutoCSR):
         return self.gpio.get_csrs()
 
 
-def core_layout(dw, hw=1):
-    return [("data", dw), ("hit", hw)]
+def core_layout(dw):
+    return [("data", dw), ("hit", 1)]
 
 
 class FrontendTrigger(Module, AutoCSR):
     def __init__(self, dw):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw))
+        self.sink = sink = stream.Endpoint(core_layout(dw))
+        self.source = source = stream.Endpoint(core_layout(dw))
 
         self.value = CSRStorage(dw)
         self.mask = CSRStorage(dw)
@@ -39,90 +40,84 @@ class FrontendTrigger(Module, AutoCSR):
         value = Signal(dw)
         mask = Signal(dw)
         self.specials += [
-            MultiReg(self.value.storage, value),
-            MultiReg(self.mask.storage, mask)
+            MultiReg(self.value.storage, value, "scope"),
+            MultiReg(self.mask.storage, mask, "scope")
         ]
 
         self.comb += [
-            self.sink.connect(self.source),
-            self.source.hit.eq((self.sink.data & mask) == value)
+            sink.connect(source),
+            source.hit.eq((sink.data & mask) == value)
         ]
 
 
 class FrontendSubSampler(Module, AutoCSR):
     def __init__(self, dw):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw))
+        self.sink = sink = stream.Endpoint(core_layout(dw))
+        self.source = source = stream.Endpoint(core_layout(dw))
 
         self.value = CSRStorage(16)
 
         # # #
 
         value = Signal(16)
-        self.specials += MultiReg(self.value.storage, value)
+        self.specials += MultiReg(self.value.storage, value, "scope")
 
         counter = Signal(16)
         done = Signal()
 
-        self.sync += \
-            If(self.source.ready,
+        self.sync.scope += \
+            If(source.ready,
                 If(done,
                     counter.eq(0)
-                ).Elif(self.sink.valid,
+                ).Elif(sink.valid,
                     counter.eq(counter + 1)
                 )
             )
 
         self.comb += [
             done.eq(counter == value),
-            self.sink.connect(self.source, omit=set(["valid"])),
-            self.source.valid.eq(self.sink.valid & done)
+            sink.connect(source, omit={"valid"}),
+            source.valid.eq(sink.valid & done)
         ]
 
 
 class AnalyzerMux(Module, AutoCSR):
     def __init__(self, dw, n):
-        self.sinks = [stream.Endpoint(core_layout(dw)) for i in range(n)]
-        self.source = stream.Endpoint(core_layout(dw))
+        self.sinks = sinks = [stream.Endpoint(core_layout(dw)) for i in range(n)]
+        self.source = source = stream.Endpoint(core_layout(dw))
 
         self.value = CSRStorage(bits_for(n))
 
         # # #
 
+        value = Signal(max=n)
+        self.specials += MultiReg(self.value.storage, value, "scope")
+
         cases = {}
         for i in range(n):
-            cases[i] = self.sinks[i].connect(self.source)
-        self.comb += Case(self.value.storage, cases)
+            cases[i] = sinks[i].connect(source)
+        self.comb += Case(value, cases)
 
 
 class AnalyzerFrontend(Module, AutoCSR):
-    def __init__(self, dw, cd_ratio):
+    def __init__(self, dw):
         self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw*cd_ratio))
+        self.source = stream.Endpoint(core_layout(dw))
 
         # # #
 
-        self.submodules.buffer = stream.Buffer(core_layout(dw))
         self.submodules.trigger = FrontendTrigger(dw)
         self.submodules.subsampler = FrontendSubSampler(dw)
-        self.submodules.converter = stream.StrideConverter(
-                core_layout(dw, 1), core_layout(dw*cd_ratio, cd_ratio))
-        self.submodules.fifo = ClockDomainsRenamer(
-            {"write": "sys", "read": "new_sys"})(
-                stream.AsyncFIFO(core_layout(dw*cd_ratio, cd_ratio), 8))
         self.submodules.pipeline = stream.Pipeline(
             self.sink,
-            self.buffer,
             self.trigger,
             self.subsampler,
-            self.converter,
-            self.fifo,
             self.source)
 
 
 class AnalyzerStorage(Module, AutoCSR):
-    def __init__(self, dw, depth, cd_ratio):
-        self.sink = stream.Endpoint(core_layout(dw, cd_ratio))
+    def __init__(self, dw, depth):
+        self.sink = sink = stream.Endpoint(core_layout(dw))
 
         self.start = CSR()
         self.length = CSRStorage(bits_for(depth))
@@ -132,47 +127,90 @@ class AnalyzerStorage(Module, AutoCSR):
         self.wait = CSRStatus()
         self.run  = CSRStatus()
 
-        self.mem_flush = CSR()
         self.mem_valid = CSRStatus()
         self.mem_ready = CSR()
         self.mem_data = CSRStatus(dw)
 
         # # #
 
-        mem = stream.SyncFIFO([("data", dw)], depth//cd_ratio, buffered=True)
-        self.submodules += ResetInserter()(mem)
-        self.comb += mem.reset.eq(self.mem_flush.re)
 
+        # control re-synchronization
+        start = Signal()
+        length = Signal(max=depth)
+        offset = Signal(max=depth)
+
+        start_ps = PulseSynchronizer("sys", "scope")
+        self.submodules += start_ps
+        self.comb += start_ps.i.eq(self.start.re)
+        self.specials += [
+            MultiReg(self.length.storage, length, "scope"),
+            MultiReg(self.offset.storage, offset, "scope")
+        ]
+
+        # status re-synchronization
+        idle = Signal()
+        wait = Signal()
+        run = Signal()
+        self.specials += [
+            MultiReg(idle, self.idle.status),
+            MultiReg(wait, self.wait.status),
+            MultiReg(run, self.run.status)
+        ]
+
+        # memory
+        mem = stream.SyncFIFO([("data", dw)], depth, buffered=True)
+        mem = ClockDomainsRenamer("scope")(mem)
+        cdc = stream.AsyncFIFO([("data", dw)], 4)
+        cdc = ClockDomainsRenamer(
+            {"write": "scope", "read": "sys"})(cdc)
+        self.submodules += mem, cdc
+
+        # flush
+        mem_flush = WaitTimer(depth)
+        mem_flush = ClockDomainsRenamer("scope")(mem_flush)
+        self.submodules += mem_flush
+
+        # fsm
         fsm = FSM(reset_state="IDLE")
+        fsm = ClockDomainsRenamer("scope")(fsm)
         self.submodules += fsm
-
         fsm.act("IDLE",
-            self.idle.status.eq(1),
-            If(self.start.re,
-                NextState("WAIT")
+            idle.eq(1),
+            If(start_ps.o,
+                NextState("FLUSH")
             ),
-            self.sink.ready.eq(1),
-            mem.source.ready.eq(self.mem_ready.re & self.mem_ready.r)
+            sink.ready.eq(1),
+            mem.source.connect(cdc.sink)
+        )
+        fsm.act("FLUSH",
+            sink.ready.eq(1),
+            mem_flush.wait.eq(1),
+            mem.source.ready.eq(1),
+            If(mem_flush.done,
+                NextState("WAIT")
+            )
         )
         fsm.act("WAIT",
-            self.wait.status.eq(1),
-            self.sink.connect(mem.sink, omit=set(["hit"])),
-            If(self.sink.valid & (self.sink.hit != 0),
+            wait.eq(1),
+            sink.connect(mem.sink, omit={"hit"}),
+            If(sink.valid & sink.hit,
                 NextState("RUN")
             ),
             mem.source.ready.eq(mem.level >= self.offset.storage)
         )
         fsm.act("RUN",
-            self.run.status.eq(1),
-            self.sink.connect(mem.sink, omit=set(["hit"])),
-            If(~mem.sink.ready | (mem.level >= self.length.storage),
+            run.eq(1),
+            sink.connect(mem.sink, omit={"hit"}),
+            If(mem.level >= self.length.storage,
                 NextState("IDLE"),
-                mem.source.ready.eq(1)
             )
         )
+
+        # memory read
         self.comb += [
-            self.mem_valid.status.eq(mem.source.valid),
-            self.mem_data.status.eq(mem.source.data)
+            self.mem_valid.status.eq(cdc.source.valid),
+            cdc.source.ready.eq(self.mem_ready.re),
+            self.mem_data.status.eq(cdc.source.data)
         ]
 
 
@@ -195,14 +233,19 @@ def _format_groups(groups):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, cd="sys", cd_ratio=1):
+    def __init__(self, groups, depth, cd="sys"):
         self.groups = _format_groups(groups)
         self.dw = max([sum([len(s) for s in g]) for g in self.groups.values()])
 
         self.depth = depth
-        self.cd_ratio = cd_ratio
 
         # # #
+
+        self.clock_domains.cd_scope = ClockDomain()
+        self.comb += [
+            self.cd_scope.clk.eq(ClockSignal(cd)),
+            self.cd_scope.rst.eq(ResetSignal(cd))
+        ]
 
         self.submodules.mux = AnalyzerMux(self.dw, len(self.groups))
         for i, signals in self.groups.items():
@@ -210,9 +253,8 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].valid.eq(1),
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
-        self.submodules.frontend = ClockDomainsRenamer(
-            {"sys": cd, "new_sys": "sys"})(AnalyzerFrontend(self.dw, cd_ratio))
-        self.submodules.storage = AnalyzerStorage(self.dw*cd_ratio, depth, cd_ratio)
+        self.submodules.frontend = AnalyzerFrontend(self.dw)
+        self.submodules.storage = AnalyzerStorage(self.dw, depth)
         self.comb += [
             self.mux.source.connect(self.frontend.sink),
             self.frontend.source.connect(self.storage.sink)
@@ -223,7 +265,6 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             return ",".join(args) + "\n"
         r = format_line("config", "None", "dw", str(self.dw))
         r += format_line("config", "None", "depth", str(self.depth))
-        r += format_line("config", "None", "cd_ratio", str(int(self.cd_ratio)))
         for i, signals in self.groups.items():
             for s in signals:
                 r += format_line("signal", str(i), vns.get_name(s), str(len(s)))

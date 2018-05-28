@@ -75,7 +75,9 @@ class LiteScopeAnalyzerDriver:
         self.frontend_subsampler_value.write(value-1)
 
     def run(self, offset, length):
-        self.storage_mem_flush.write(1)
+        # flush cdc
+        for i in range(4):
+            self.storage_mem_ready.write(1)
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
@@ -92,7 +94,7 @@ class LiteScopeAnalyzerDriver:
     def upload(self):
         if self.debug:
             print("[uploading]...")
-        length = self.storage_length.read()//self.cd_ratio
+        length = self.storage_length.read()
         for position in range(1, length + 1):
             if self.debug:
                 sys.stdout.write("|{}>{}| {}%\r".format('=' * (20*position//length),
@@ -103,12 +105,6 @@ class LiteScopeAnalyzerDriver:
             self.storage_mem_ready.write(1)
         if self.debug:
             print("")
-        if self.cd_ratio > 1:
-            new_data = DumpData(self.dw)
-            for data in self.data:
-                for i in range(self.cd_ratio):
-                    new_data.append(*get_bits([data], i*self.dw, (i+1)*self.dw))
-            self.data = new_data
         return self.data
 
     def save(self, filename, samplerate=None):
