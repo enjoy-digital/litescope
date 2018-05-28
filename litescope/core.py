@@ -38,6 +38,7 @@ class FrontendTrigger(Module, AutoCSR):
         self.mem_write = CSR()
         self.mem_mask = CSRStorage(dw)
         self.mem_value = CSRStorage(dw)
+        self.mem_full = CSRStatus()
 
         # # #
 
@@ -58,7 +59,8 @@ class FrontendTrigger(Module, AutoCSR):
         self.comb += [
             mem.sink.valid.eq(self.mem_write.re),
             mem.sink.mask.eq(self.mem_mask.storage),
-            mem.sink.value.eq(self.mem_value.storage)
+            mem.sink.value.eq(self.mem_value.storage),
+            self.mem_full.status.eq(~mem.sink.ready)
         ]
 
         # hit and memory read/flush
