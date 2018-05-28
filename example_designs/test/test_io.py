@@ -1,7 +1,15 @@
-import time
-from litex.soc.tools.remote import RemoteClient
-from litescope.software.driver.io import LiteScopeIODriver
+#!/usr/bin/env python3
 
+import time
+
+from litex.soc.tools.remote import RemoteClient
+
+from litescope import LiteScopeIODriver
+
+wb = RemoteClient()
+wb.open()
+
+# # #
 
 def led_anim0(inout):
     for i in range(10):
@@ -24,11 +32,6 @@ def led_anim1(inout):
             io.write(led_data)
             time.sleep(i*i*0.0020)
             led_data = (led_data >> 1)
-
-wb = RemoteClient()
-wb.open()
-
-# # #
 
 io = LiteScopeIODriver(wb.regs, "io")
 

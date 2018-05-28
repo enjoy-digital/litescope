@@ -1,5 +1,8 @@
+#!/usr/bin/env python3
+
 from litex.soc.tools.remote import RemoteClient
-from litescope.software.driver.analyzer import LiteScopeAnalyzerDriver
+
+from litescope import LiteScopeAnalyzerDriver
 
 wb = RemoteClient()
 wb.open()
