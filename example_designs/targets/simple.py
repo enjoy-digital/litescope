@@ -15,18 +15,23 @@ class LiteScopeSoC(SoCCore):
     csr_map.update(SoCCore.csr_map)
 
     def __init__(self, platform):
-        clk_freq = int((1/(platform.default_clk_period))*1000000000)
-        SoCCore.__init__(self, platform, clk_freq,
+        sys_clk_freq = int((1e9/platform.default_clk_period))
+        SoCCore.__init__(self, platform, sys_clk_freq,
             cpu_type=None,
             csr_data_width=32,
             with_uart=False,
             ident="Litescope example design", ident_version=True,
             with_timer=False
         )
-        self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))
-        self.add_wb_master(self.cpu_or_bridge.wishbone)
+        # crg
         self.submodules.crg = CRG(platform.request(platform.default_clk_name))
 
+        # bridge
+        self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"),
+            sys_clk_freq, baudrate=115200))
+        self.add_wb_master(self.cpu_or_bridge.wishbone)
+
+        # Litescope IO
         self.submodules.io = LiteScopeIO(8)
         for i in range(8):
             try:
@@ -34,39 +39,28 @@ class LiteScopeSoC(SoCCore):
             except:
                 pass
 
-        # use name override to keep naming in capture
-        counter = Signal(16, name_override="counter")
-        counter0 = Signal(name_override="counter0")
-        counter1 = Signal(name_override="counter1")
-        counter2 = Signal(name_override="counter2")
-        counter3 = Signal(name_override="counter3")
-        self.sync += counter.eq(counter + 1)
-        self.comb += [
-            counter0.eq(counter[0]),
-            counter1.eq(counter[1]),
-            counter2.eq(counter[2]),
-            counter3.eq(counter[3]),
-        ]
-        zero = Signal()
-        self.comb += zero.eq(counter == 0)
+        # Litescope Analyzer
+        analyzer_groups = {}
 
-        # group for vcd capture
-        vcd_group = [
+        # counter group
+        counter = Signal(16, name_override="counter")
+        zero = Signal(name_override="zero")
+        self.sync += counter.eq(counter + 1)
+        self.comb += zero.eq(counter == 0)
+        analyzer_groups[0] = [
             zero,
-            counter,
+            counter
         ]
-        # group for sigrok capture (no bus support)
-        sigrok_group = [
-            counter0,
-            counter1,
-            counter2,
-            counter3
+
+        # cpmmunication group
+        analyzer_groups[1] = [
+            platform.lookup_request("serial").tx,
+            platform.lookup_request("serial").rx,
+            self.cpu_or_bridge.wishbone
         ]
-        analyzer_signals = {
-            0 : vcd_group,
-            1 : sigrok_group
-        }
-        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals, 512)
+
+        # analyzer
+        self.submodules.analyzer = LiteScopeAnalyzer(analyzer_groups, 512)
 
     def do_exit(self, vns):
         self.analyzer.export_csv(vns, "test/analyzer.csv")
