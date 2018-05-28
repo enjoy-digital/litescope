@@ -87,9 +87,9 @@ class FrontendTrigger(Module, AutoCSR):
                 self.specials += MultiReg(self.hit_count.storage, hit_count)
                 hit_reset = Signal()
                 self.specials += MultiReg(self.hit_reset, hit_reset)
-                hit_counter = Signal(hitcountbits)
+                self.hit_counter = hit_counter = Signal(hitcountbits)
 
-        self.comb += self.sink.connect(self.source)
+        self.comb += self.sink.connect(self.source, omit=set(["hit"]))
         if edges:
             hit_masked = Signal(dw)
             for i in range(0, dw):
@@ -106,7 +106,7 @@ class FrontendTrigger(Module, AutoCSR):
                 self.sync += [
                     If(hit_reset,
                        hit_counter.eq(0)
-                       ).Elif( (hit_masked != 0) & (hit_counter < ((1 << hitcountbits)-1)),
+                       ).Elif( (hit_masked != 0) & (hit_counter < hit_count), # count up to hit_count then stop, freezing in trigger
                               hit_counter.eq(hit_counter + 1)
                        )
                 ]
@@ -122,9 +122,9 @@ class FrontendTrigger(Module, AutoCSR):
 
 
 class FrontendSubSampler(Module, AutoCSR):
-    def __init__(self, dw):
-        self.sink = stream.Endpoint(core_layout(dw))
-        self.source = stream.Endpoint(core_layout(dw))
+    def __init__(self, dw, triggers):
+        self.sink = stream.Endpoint(core_layout(dw, triggers))
+        self.source = stream.Endpoint(core_layout(dw, triggers))
 
         self.value = CSRStorage(16)
 
@@ -175,8 +175,19 @@ class AnalyzerFrontend(Module, AutoCSR):
         # # #
 
         self.submodules.buffer = stream.Buffer(core_layout(dw, triggers))
-        self.submodules.trigger = FrontendTrigger(dw, edges, hitcountbits)
-        self.submodules.subsampler = FrontendSubSampler(dw)
+
+        if triggers == 2:
+            self.submodules.trigger2 = FrontendTrigger(dw, edges=edges, hitcountbits=hitcountbits, triggers=triggers, trigger_num=1)
+            self.comb += [
+                self.trigger2.sink.eq(self.buffer.source),  # tap the buffer and compute triggers
+                ]
+            self.submodules.trigger = FrontendTrigger(dw, edges, hitcountbits=hitcountbits, triggers=triggers) # leave at default trigger_num = 0
+            self.comb += self.trigger.source.hit[1].eq(self.trigger2.source.hit[1])  # map 2nd trigger output back into the main flow
+
+        else:
+            self.submodules.trigger = FrontendTrigger(dw, edges, hitcountbits=hitcountbits, triggers=triggers)  # leave at default trigger_num = 0
+
+        self.submodules.subsampler = FrontendSubSampler(dw, triggers)
         self.submodules.converter = stream.StrideConverter(
                 core_layout(dw, 1 * triggers), core_layout(dw*cd_ratio, cd_ratio * triggers))
         self.submodules.fifo = ClockDomainsRenamer(
@@ -191,12 +202,6 @@ class AnalyzerFrontend(Module, AutoCSR):
             self.fifo,
             self.source)
 
-        if triggers == 2:
-            self.submodules.trigger2 = FrontendTrigger(dw, edges=edges, hitcountbits=hitcountbits, trigger_num=1)
-            self.comb += [
-                self.trigger2.sink.eq(self.buffer.source),  # tap the buffer and compute triggers
-                self.trigger.source.hit[1].eq(self.trigger2.source.hit[1])  # map 2nd trigger output back into the main flow
-                ]
 
 
 class AnalyzerStorage(Module, AutoCSR):
@@ -258,6 +263,8 @@ class AnalyzerStorage(Module, AutoCSR):
                 self.sink.connect(mem.sink, omit=set(["hit"])),
                 If(self.sink.valid & (self.sink.hit[0] != 0),
                     NextState("WAIT2")
+                ).Elif(self.restart.re,
+                       NextState("IDLE")
                 ),
                 mem.source.ready.eq(mem.level >= self.offset.storage)
             )
@@ -266,6 +273,8 @@ class AnalyzerStorage(Module, AutoCSR):
                 self.sink.connect(mem.sink, omit=set(["hit"])),
                 If(self.sink.valid & (self.sink.hit[1] != 0),
                     NextState("RUN")
+                ).Elif(self.restart.re,
+                       NextState("IDLE")
                 ),
                 mem.source.ready.eq(mem.level >= self.offset.storage)
             )
@@ -343,10 +352,13 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             self.mux.source.connect(self.frontend.sink),
             self.frontend.source.connect(self.storage.sink),
         ]
+        # keep triggers in reset throughout the whole pipeline
+        # because there's an ASYNCFIFO in between the trigger computation and interpretation
+        # stale data in the FIFO can cause faulty triggering if the triggers are allowed to spin when not strictly active
         if hitcountbits > 0:
-            self.comb += self.frontend.trigger.hit_reset.eq(self.storage.start.re)  # reset the hit count when analyzer is started
+            self.comb += self.frontend.trigger.hit_reset.eq(self.storage.idle.status)  # reset the hit count when analyzer is IDLE
             if triggers == 2:
-                self.comb += self.frontend.trigger2.hit_reset.eq(self.storage.wait) # reset trigger2's hit count while trigger 1 is pending
+                self.comb += self.frontend.trigger2.hit_reset.eq(self.storage.wait.status | self.storage.idle.status) # reset trigger2's hit count while trigger 1 is pending
 
 
 

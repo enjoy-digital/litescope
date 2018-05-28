@@ -70,10 +70,23 @@ class LiteScopeAnalyzerDriver:
         m = getattr(self, "frontend_trigger_mask")
         t.write(value)
         m.write(mask)
-
+    def configure_trigger2(self, value=0, mask=0, cond=None):
+        if cond is not None:
+            for k, v in cond.items():
+                value |= getattr(self, k + "_o")*v
+                mask |= getattr(self, k + "_m")
+        t = getattr(self, "frontend_trigger2_value")
+        m = getattr(self, "frontend_trigger2_mask")
+        t.write(value)
+        m.write(mask)
+        
     def configure_hitcount(self, hitcount):
         r = getattr(self, "frontend_trigger_hit_count")
         r.write(hitcount)
+    def configure_hitcount2(self, hitcount):
+        r = getattr(self, "frontend_trigger2_hit_count")
+        r.write(hitcount)
+
         
     def configure_edges(self, mask=0, cond=None):
         if cond is not None:
@@ -81,7 +94,13 @@ class LiteScopeAnalyzerDriver:
                 mask |= getattr(self, k + "_m")
         m = getattr(self, "frontend_trigger_edge_enable")
         m.write(mask)
-
+    def configure_edges2(self, mask=0, cond=None):
+        if cond is not None:
+            for k in cond:
+                mask |= getattr(self, k + "_m")
+        m = getattr(self, "frontend_trigger2_edge_enable")
+        m.write(mask)
+        
     # the check function can be called to confirm that
     # the analyzer values are all configured correctly
     def check(self):
@@ -118,17 +137,44 @@ class LiteScopeAnalyzerDriver:
             if bitset == 0:
                 print("   No bits set")
 
+    def check2(self):
+        attrs = [ "storage_wait2",
+                  "frontend_trigger2_hit_count",
+                  ]
+        for i in attrs:
+            print(i, format(getattr(self, i).read(), '02x'))
+
+        setup = [ "frontend_trigger2_value",
+                  "frontend_trigger2_mask",
+                  "frontend_trigger2_edge_enable",                  
+                  ]
+        for i in setup:
+            print("bits set in", i, ": ")
+            bitset = 0
+            val = getattr(self, i).read()
+            for signals in self.layouts.values():
+                value = 0
+                for name, length in signals:
+                    mask = (2**length-1) << value
+                    value += length
+                    if val & mask != 0:
+                        print("  ", name, ": ", format(val >> (value - 1), '0x'))
+                        bitset = 1
+            if bitset == 0:
+                print("   No bits set")
+
         
     def configure_subsampler(self, value):
         self.frontend_subsampler_value.write(value-1)
 
     def run(self, offset, length):
         self.storage_mem_flush.write(1)
+        self.storage_restart.write(1)  # bring any triggers back to IDLE
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
         self.storage_length.write(length)
-        self.storage_start.write(1)
+        self.storage_start.write(1)  # releases from IDLE to RUN
 
     def done(self):
         return self.storage_readout.read()
