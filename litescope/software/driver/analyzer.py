@@ -23,6 +23,10 @@ class LiteScopeAnalyzerDriver:
         self.group = 0
         self.data = DumpData(self.dw)
 
+        # disable frontend and storage
+        self.frontend_trigger_enable.write(0)
+        self.storage_enable.write(0)
+
     def get_config(self):
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
         for item in csv_reader:
@@ -62,30 +66,28 @@ class LiteScopeAnalyzerDriver:
         self.mux_value.write(value)
 
     def configure_trigger(self, value=0, mask=0, cond=None):
+        self.frontend_trigger_enable.write(0)
         if cond is not None:
             for k, v in cond.items():
                 value |= getattr(self, k + "_o")*v
                 mask |= getattr(self, k + "_m")
-        t = getattr(self, "frontend_trigger_value")
-        m = getattr(self, "frontend_trigger_mask")
-        t.write(value)
-        m.write(mask)
+        self.frontend_trigger_mem_mask.write(mask)
+        self.frontend_trigger_mem_value.write(value)
+        self.frontend_trigger_mem_write.write(1)
 
     def configure_subsampler(self, value):
         self.frontend_subsampler_value.write(value-1)
 
     def run(self, offset, length):
-        # flush cdc
-        for i in range(4):
-            self.storage_mem_ready.write(1)
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
         self.storage_length.write(length)
-        self.storage_start.write(1)
+        self.storage_enable.write(1)
+        self.frontend_trigger_enable.write(1)
 
     def done(self):
-        return self.storage_idle.read()
+        return self.storage_done.read()
 
     def wait_done(self):
         while not self.done():

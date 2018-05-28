@@ -28,25 +28,55 @@ def core_layout(dw):
 
 
 class FrontendTrigger(Module, AutoCSR):
-    def __init__(self, dw):
+    def __init__(self, dw, depth=16):
         self.sink = sink = stream.Endpoint(core_layout(dw))
         self.source = source = stream.Endpoint(core_layout(dw))
 
-        self.value = CSRStorage(dw)
-        self.mask = CSRStorage(dw)
+        self.enable = CSRStorage()
+        self.done = CSRStatus()
+
+        self.mem_write = CSR()
+        self.mem_mask = CSRStorage(dw)
+        self.mem_value = CSRStorage(dw)
 
         # # #
 
-        value = Signal(dw)
-        mask = Signal(dw)
-        self.specials += [
-            MultiReg(self.value.storage, value, "scope"),
-            MultiReg(self.mask.storage, mask, "scope")
+        # control re-synchronization
+        enable = Signal()
+        enable_d = Signal()
+        self.specials += MultiReg(self.enable.storage, enable, "scope")
+        self.sync.scope += enable_d.eq(enable)
+
+        # status re-synchronization
+        done = Signal()
+        self.specials += MultiReg(done, self.done.status)
+
+        # memory and configuration
+        mem = stream.AsyncFIFO([("mask", dw), ("value", dw)], depth)
+        mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
+        self.submodules += mem
+        self.comb += [
+            mem.sink.valid.eq(self.mem_write.re),
+            mem.sink.mask.eq(self.mem_mask.storage),
+            mem.sink.value.eq(self.mem_value.storage)
         ]
 
+        # hit and memory read/flush
+        hit = Signal()
+        flush = WaitTimer(depth)
+        self.submodules += flush
+        self.comb += [
+            flush.wait.eq(~(~enable & enable_d)), # flush when disabling
+            hit.eq((sink.data & mem.source.mask) == mem.source.value),
+            mem.source.ready.eq(enable & (hit | ~flush.done)),
+        ]
+
+        # output
         self.comb += [
             sink.connect(source),
-            source.hit.eq((sink.data & mask) == value)
+            # we are done when mem is empty
+            done.eq(~mem.source.valid),
+            source.hit.eq(done)
         ]
 
 
@@ -119,13 +149,11 @@ class AnalyzerStorage(Module, AutoCSR):
     def __init__(self, dw, depth):
         self.sink = sink = stream.Endpoint(core_layout(dw))
 
-        self.start = CSR()
+        self.enable = CSRStorage()
+        self.done = CSRStatus()
+
         self.length = CSRStorage(bits_for(depth))
         self.offset = CSRStorage(bits_for(depth))
-
-        self.idle = CSRStatus()
-        self.wait = CSRStatus()
-        self.run  = CSRStatus()
 
         self.mem_valid = CSRStatus()
         self.mem_ready = CSR()
@@ -135,27 +163,24 @@ class AnalyzerStorage(Module, AutoCSR):
 
 
         # control re-synchronization
-        start = Signal()
+        enable = Signal()
+        enable_d = Signal()
+
+        enable = Signal()
+        enable_d = Signal()
+        self.specials += MultiReg(self.enable.storage, enable, "scope")
+        self.sync.scope += enable_d.eq(enable)
+
         length = Signal(max=depth)
         offset = Signal(max=depth)
-
-        start_ps = PulseSynchronizer("sys", "scope")
-        self.submodules += start_ps
-        self.comb += start_ps.i.eq(self.start.re)
         self.specials += [
             MultiReg(self.length.storage, length, "scope"),
             MultiReg(self.offset.storage, offset, "scope")
         ]
 
         # status re-synchronization
-        idle = Signal()
-        wait = Signal()
-        run = Signal()
-        self.specials += [
-            MultiReg(idle, self.idle.status),
-            MultiReg(wait, self.wait.status),
-            MultiReg(run, self.run.status)
-        ]
+        done = Signal()
+        self.specials += MultiReg(done, self.done.status)
 
         # memory
         mem = stream.SyncFIFO([("data", dw)], depth, buffered=True)
@@ -175,8 +200,8 @@ class AnalyzerStorage(Module, AutoCSR):
         fsm = ClockDomainsRenamer("scope")(fsm)
         self.submodules += fsm
         fsm.act("IDLE",
-            idle.eq(1),
-            If(start_ps.o,
+            done.eq(1),
+            If(enable & ~enable_d,
                 NextState("FLUSH")
             ),
             sink.ready.eq(1),
@@ -191,7 +216,6 @@ class AnalyzerStorage(Module, AutoCSR):
             )
         )
         fsm.act("WAIT",
-            wait.eq(1),
             sink.connect(mem.sink, omit={"hit"}),
             If(sink.valid & sink.hit,
                 NextState("RUN")
@@ -199,7 +223,6 @@ class AnalyzerStorage(Module, AutoCSR):
             mem.source.ready.eq(mem.level >= self.offset.storage)
         )
         fsm.act("RUN",
-            run.eq(1),
             sink.connect(mem.sink, omit={"hit"}),
             If(mem.level >= self.length.storage,
                 NextState("IDLE"),
@@ -209,7 +232,7 @@ class AnalyzerStorage(Module, AutoCSR):
         # memory read
         self.comb += [
             self.mem_valid.status.eq(cdc.source.valid),
-            cdc.source.ready.eq(self.mem_ready.re),
+            cdc.source.ready.eq(self.mem_ready.re | ~self.enable.storage),
             self.mem_data.status.eq(cdc.source.data)
         ]
 
