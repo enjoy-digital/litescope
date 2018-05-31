@@ -122,7 +122,7 @@ class _Mux(Module, AutoCSR):
 
         # # #
 
-        value = Signal(max=n)
+        value = Signal(bits_for(n))
         self.specials += MultiReg(self.value.storage, value, "scope")
 
         cases = {}
