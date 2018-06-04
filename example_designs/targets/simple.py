@@ -52,7 +52,7 @@ class LiteScopeSoC(SoCCore):
             counter
         ]
 
-        # cpmmunication group
+        # communication group
         analyzer_groups[1] = [
             platform.lookup_request("serial").tx,
             platform.lookup_request("serial").rx,
