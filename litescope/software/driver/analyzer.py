@@ -91,6 +91,8 @@ class LiteScopeAnalyzerDriver:
         self.subsampler_value.write(value-1)
 
     def run(self, offset, length):
+        assert offset < self.depth
+        assert length <= self.depth
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
