@@ -1,7 +1,8 @@
 import os
 import sys
 
-from migen.fhdl.structure import *
+
+from migen import *
 
 from litescope.software.dump.common import *
 from litescope.software.dump import *
@@ -139,3 +140,16 @@ class LiteScopeAnalyzerDriver:
             raise NotImplementedError
         dump.add_from_layout(self.layouts[self.group], self.data)
         dump.write(filename)
+
+    def get_instant_value(self, group, name):
+        self.data = DumpData(self.data_width)
+        self.debug = False
+        self.configure_group(group)
+        self.configure_trigger()
+        self.configure_subsampler(1)
+        self.run(0, 1)
+        self.wait_done()
+        self.upload()
+        min_idx = log2_int(getattr(self, name + "_o"))
+        max_idx = min_idx + log2_int((getattr(self, name + "_m") >> min_idx) + 1)
+        return self.data[min_idx:max_idx][0]
