@@ -59,6 +59,19 @@ class LiteScopeSoC(SoCCore):
             self.cpu_or_bridge.wishbone
         ]
 
+        # fsm group
+        fsm = FSM(reset_state="STATE1")
+        self.submodules += fsm
+        fsm.act("STATE1",
+            NextState("STATE2")
+        )
+        fsm.act("STATE2",
+            NextState("STATE1")
+        )
+        analyzer_groups[2] = [
+            fsm
+        ]
+
         # analyzer
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_groups, 512)
 

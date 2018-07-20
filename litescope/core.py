@@ -274,6 +274,10 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             for s in signals:
                 if isinstance(s, Record):
                     split_signals.extend(s.flatten())
+                elif isinstance(s, FSM):
+                    s.do_finalize()
+                    s.finalized = True
+                    split_signals.append(s.state)
                 else:
                     split_signals.append(s)
             new_groups[n] = split_signals
