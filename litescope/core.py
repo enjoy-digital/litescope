@@ -224,7 +224,7 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, cd="sys"):
+    def __init__(self, groups, depth, cd="sys", trigger_depth=16):
         self.groups = groups = self.format_groups(groups)
         self.depth = depth
 
@@ -249,7 +249,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             ]
 
         # frontend
-        self.submodules.trigger = _Trigger(data_width)
+        self.submodules.trigger = _Trigger(data_width, depth=trigger_depth)
         self.submodules.subsampler = _SubSampler(data_width)
 
         # storage
