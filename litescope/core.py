@@ -224,7 +224,12 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, cd="sys", trigger_depth=16):
+    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, **kwargs):
+        # retro-compatibility # FIXME: remove
+        if "cd" in kwargs:
+            print("[WARNING] Please update LiteScopeAnalyzer's \"cd\" parameter to \"clock_domain\"")
+            clock_domain = kwargs["cd"]
+
         self.groups = groups = self.format_groups(groups)
         self.depth = depth
 
@@ -236,8 +241,8 @@ class LiteScopeAnalyzer(Module, AutoCSR):
         # create scope clock domain
         self.clock_domains.cd_scope = ClockDomain()
         self.comb += [
-            self.cd_scope.clk.eq(ClockSignal(cd)),
-            self.cd_scope.rst.eq(ResetSignal(cd))
+            self.cd_scope.clk.eq(ClockSignal(clock_domain)),
+            self.cd_scope.rst.eq(ResetSignal(clock_domain))
         ]
 
         # mux
