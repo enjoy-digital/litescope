@@ -1,5 +1,17 @@
+from itertools import count
 import datetime
 from litescope.software.dump.common import Dump, dec2bin
+
+
+def vcd_codes():
+    codechars = [chr(i) for i in range(33, 127)]
+    for n in count():
+        q, r = divmod(n, len(codechars))
+        code = codechars[r]
+        while q > 0:
+            q, r = divmod(q, len(codechars))
+            code = codechars[r] + code
+        yield code
 
 
 class VCDDump(Dump):
@@ -19,7 +31,7 @@ class VCDDump(Dump):
                     c += "b"
                     c += dec2bin(v.values[self.cnt + 1], v.width)
                     c += " "
-                    c += v.vcd_id
+                    c += v.code
                     c += "\n"
             except:
                 pass
@@ -59,7 +71,7 @@ class VCDDump(Dump):
             r += "$var wire "
             r += str(v.width)
             r += " "
-            r += v.vcd_id
+            r += v.code
             r += " "
             r += v.name
             r += " $end\n"
@@ -76,7 +88,7 @@ class VCDDump(Dump):
             r += "b"
             r += dec2bin(v.current_value, v.width)
             r += " "
-            r += v.vcd_id
+            r += v.code
             r += "\n"
         r += "$end\n"
         return r
@@ -93,10 +105,9 @@ class VCDDump(Dump):
         return r
 
     def finalize(self):
-        vcd_id = "!"
+        codegen = vcd_codes()
         for v in self.variables:
-            v.vcd_id = vcd_id
-            vcd_id = chr(ord(vcd_id)+1)
+            v.code = next(codegen)
 
     def write(self, filename):
         self.finalize()
