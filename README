@@ -18,27 +18,22 @@ LiteScope is part of LiteX libraries whose aims are to lower entry level of
 complex FPGA cores by providing simple, elegant and efficient implementations
 of components used in today's SoC such as Ethernet, SATA, PCIe, SDRAM Controller...
 
-Since Python is used to describe the HDL, the core is highly and easily
-configurable.
-
-LiteScope is built using LiteX and uses technologies developed in partnership with
-M-Labs Ltd:
- - Migen enables generating HDL with Python in an efficient way.
- - MiSoC provides the basic blocks to build a powerful and small footprint SoC.
+Using Migen to describe the HDL allows the core to be highly and easily configurable.
 
 LiteScope can be used as LiteX library or can be integrated with your standard
 design flow by generating the verilog rtl that you will use as a standard core.
 
 [> Features
 -----------
-- IO peek and poke with LiteScopeIO
+- IO peek and poke with LiteScopeIO.
 - Logic analyser with LiteScopeAnalyzer:
-  - Subsampling
-  - Data storage in block rams
+  - Subsampling.
+  - Data storage in Block RAM.
+  - Configurable triggers.
 - Bridges:
-  - UART2Wishbone (provided by LiteX)
-  - Ethernet2Wishbone ("Etherbone") (provided by LiteEth)
-  - PCIe2Wishbone (provided by LitePCIe)
+  - UART <--> Wishbone (provided by LiteX)
+  - Ethernet <--> Wishbone ("Etherbone") (provided by LiteEth)
+  - PCIe <--> Wishbone (provided by LitePCIe)
 - Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
 
 [> Proven
@@ -68,7 +63,7 @@ enjoy-digital.fr.
   python3 setup.py develop
   cd ..
 
-3. TODO: add/describe example design(s)
+3. TODO: add/describe examples
 
 [> Tests
 --------
