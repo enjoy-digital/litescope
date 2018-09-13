@@ -91,7 +91,9 @@ class LiteScopeAnalyzerDriver:
     def configure_subsampler(self, value):
         self.subsampler_value.write(value-1)
 
-    def run(self, offset, length):
+    def run(self, offset = 0, length = None):
+        if length is None:
+            length = self.depth
         assert offset < self.depth
         assert length <= self.depth
         if self.debug:
