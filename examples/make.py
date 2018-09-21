@@ -83,7 +83,10 @@ if __name__ == "__main__":
                 raise ValueError("Target has no default platform, specify a platform with -p your_platform")
         else:
             platform_name = args.platform
-        platform_module = _import("litex.boards.platforms", platform_name)
+        try:
+            platform_module = _import("litex.boards.platforms", platform_name)
+        except:
+            platform_module = _import("migen.build.platforms", platform_name)
         platform_kwargs = dict((k, autotype(v)) for k, v in args.platform_option)
         platform = platform_module.Platform(**platform_kwargs)
 
