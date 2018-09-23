@@ -2,7 +2,7 @@
 
 import time
 
-from litex.soc.tools.remote import RemoteClient
+from litex import RemoteClient
 
 from litescope import LiteScopeIODriver
 
