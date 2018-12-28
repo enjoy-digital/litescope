@@ -65,12 +65,12 @@ class _Trigger(Module, AutoCSR):
 
         # hit and memory read/flush
         hit = Signal()
-        flush = WaitTimer(depth)
+        flush = WaitTimer(2*depth)
         self.submodules += flush
         self.comb += [
             flush.wait.eq(~(~enable & enable_d)), # flush when disabling
             hit.eq((sink.data & mem.source.mask) == mem.source.value),
-            mem.source.ready.eq(enable & (hit | ~flush.done)),
+            mem.source.ready.eq((enable & hit) | ~flush.done),
         ]
 
         # output
