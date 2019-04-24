@@ -165,6 +165,8 @@ Depth: {}
         platform.finalize(soc_fragment)
         v_output = platform.get_verilog(soc_fragment, name="litescope",
             special_overrides=xilinx_special_overrides)
+        if not os.path.exists("build"):
+            os.makedirs("build")
         v_output.write("build/litescope.v")
 
     if actions["build-bitstream"]:
