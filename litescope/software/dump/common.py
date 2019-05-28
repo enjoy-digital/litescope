@@ -67,7 +67,7 @@ class Dump:
         i = 0
         for s, n in layout:
             values = variable[i:i+n]
-            values2x = [values[i//2] for i in range(len(values)*2)]
+            values2x = [values[j//2] for j in range(len(values)*2)]
             self.add(DumpVariable(s, n, values2x))
             i += n
         self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
