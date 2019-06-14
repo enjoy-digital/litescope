@@ -48,8 +48,8 @@ class DumpData(list):
 
 class DumpVariable:
     def __init__(self, name, width, values=[]):
-        self.width = width
         self.name = name
+        self.width = width
         self.values = [int(v)%2**width for v in values]
 
     def __len__(self):
@@ -64,12 +64,26 @@ class Dump:
         self.variables.append(variable)
 
     def add_from_layout(self, layout, variable):
-        i = 0
-        for s, n in layout:
-            values = variable[i:i+n]
-            values2x = [values[j//2] for j in range(len(values)*2)]
-            self.add(DumpVariable(s, n, values2x))
-            i += n
+        offset = 0
+        for name, sample_width in layout:
+            values = variable[offset:offset+sample_width]
+            values2x = [values[i//2] for i in range(len(values)*2)]
+            self.add(DumpVariable(name, sample_width, values2x))
+            offset += sample_width
+        self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
+
+    def add_from_layout_flatten(self, layout, variable):
+        offset = 0
+        for name, sample_width in layout:
+            # The samples from the logic analyzer end up in an array of size sample size
+            # and have n (number of channel) bits. The following does a bit slice on the array
+            # elements (implemented above)
+            values = variable[offset:offset+sample_width]
+            values_flatten = [values[i//sample_width] >> (i % sample_width ) & 1 for i in range(len(values)*sample_width)]
+            self.add(DumpVariable(name, 1, values_flatten))
+            offset += sample_width
+        # the clock.. might need some more love here. the clock pattern probably should be sample_width wide
+        # e.g. 11110000 and not 10101010
         self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
 
     def __len__(self):
