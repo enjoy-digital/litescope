@@ -126,7 +126,7 @@ class LiteScopeAnalyzerDriver:
             print("")
         return self.data
 
-    def save(self, filename, samplerate=None):
+    def save(self, filename, samplerate=None, flatten=False):
         if self.debug:
             print("[writing to " + filename + "]...")
         name, ext = os.path.splitext(filename)
@@ -140,7 +140,10 @@ class LiteScopeAnalyzerDriver:
             dump = SigrokDump(samplerate=samplerate)
         else:
             raise NotImplementedError
-        dump.add_from_layout(self.layouts[self.group], self.data)
+        if not flatten:
+            dump.add_from_layout(self.layouts[self.group], self.data)
+        else:
+            dump.add_from_layout_flatten(self.layouts[self.group], self.data)
         dump.write(filename)
 
     def get_instant_value(self, group, name):
