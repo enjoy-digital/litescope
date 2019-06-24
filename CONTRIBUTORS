@@ -1,0 +1,18 @@
+LiteX ecosystem would not exist without the collaborative work of contributors! Here is below the
+list of all the LiteScope contributors.
+
+In the source code, each file list the main authors/contributors:
+- author(s) that created the initial content.
+- contributor(s) that added essential features/improvements.
+
+If you think you should be in this list and don't find yourself, write to florent@enjoy-digital.fr
+and we'll fix it!
+
+Contributors:
+Copyright (c) 2018 bunnie <bunnie@kosagi.com>
+Copyright (c) 2018 Felix Held <felix-github@felixheld.de>
+Copyright (c) 2015-2019 Florent Kermarrec <florent@enjoy-digital.fr>
+Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
+Copyright (c) 2018 Sean Cross <sean@xobs.io>
+Copyright (c) 2016 Tim Ansell <mithro@mithis.com>
+Copyright (c) 2016 Tim 'mithro' Ansell <mithro@mithis.com>

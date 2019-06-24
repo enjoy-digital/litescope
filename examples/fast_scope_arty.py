@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# This file is Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
+# License: BSD
+
 from migen import *
 
 from litex.boards.platforms import arty
@@ -18,8 +21,8 @@ from litescope import LiteScopeIO, LiteScopeAnalyzer
 # Those are the fast and not so well protected pins.
 _serdes_io = [
     ("serdes_io", 0,
-        Subsignal("d0", Pins("E15"),IOStandard("LVCMOS33")), 
-        Subsignal("d1", Pins("E16"),IOStandard("LVCMOS33")), 
+        Subsignal("d0", Pins("E15"),IOStandard("LVCMOS33")),
+        Subsignal("d1", Pins("E16"),IOStandard("LVCMOS33")),
         Subsignal("d2", Pins("D15"),IOStandard("LVCMOS33")),
         Subsignal("d3", Pins("C15"),IOStandard("LVCMOS33")),
         Subsignal("d4", Pins("J17"),IOStandard("LVCMOS33")),
@@ -34,9 +37,9 @@ class SerdesInputSignal(Module):
 
         self.signals = Signal(8)
         #
-        # Based on a 100MHz input clock and a 400MHz sample clock and 
+        # Based on a 100MHz input clock and a 400MHz sample clock and
         # Measuring at ddr speed we are sampling at 800Mhz
-        # 
+        #
         self.specials += Instance("ISERDESE2",
                 p_DATA_WIDTH=8, p_DATA_RATE="DDR",
                 p_SERDES_MODE="MASTER", p_INTERFACE_TYPE="NETWORKING",
@@ -98,7 +101,7 @@ class LiteScopeSoC(SoCCore):
 
     def __init__(self, platform):
         sys_clk_freq = int(100e6)
-    
+
         SoCCore.__init__(self, platform, sys_clk_freq,
             cpu_type=None,
             csr_data_width=32,

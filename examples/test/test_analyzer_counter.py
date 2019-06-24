@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# This file is Copyright (c) 2018 Florent Kermarrec <florent@enjoy-digital.fr>
+# License: BSD
+
 from litex import RemoteClient
 
 from litescope import LiteScopeAnalyzerDriver

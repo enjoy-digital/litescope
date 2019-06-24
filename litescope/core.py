@@ -1,3 +1,8 @@
+# This file is Copyright (c) 2016-2018 Florent Kermarrec <florent@enjoy-digital.fr>
+# This file is Copyright (c) 2018 bunnie <bunnie@kosagi.com>
+# This file is Copyright (c) 2016 Tim 'mithro' Ansell <mithro@mithis.com>
+# License: BSD
+
 from migen import *
 from migen.genlib.misc import WaitTimer
 from migen.genlib.cdc import MultiReg, PulseSynchronizer

@@ -1,3 +1,6 @@
+# This file is Copyright (c) 2015 Florent Kermarrec <florent@enjoy-digital.fr>
+# License: BSD
+
 from litescope.software.dump.common import Dump, dec2bin
 
 
