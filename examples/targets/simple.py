@@ -32,7 +32,7 @@ class LiteScopeSoC(SoCCore):
         # bridge
         self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"),
             sys_clk_freq, baudrate=115200))
-        self.add_wb_master(self.cpu_or_bridge.wishbone)
+        self.add_wb_master(self.cpu.wishbone)
 
         # Litescope IO
         self.submodules.io = LiteScopeIO(8)
