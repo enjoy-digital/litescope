@@ -56,7 +56,7 @@ class Core(SoCCore):
             with_timer=False
         )
         self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))
-        self.add_wb_master(self.cpu_or_bridge.wishbone)
+        self.add_wb_master(self.cpu.wishbone)
 
         self.bus = platform.request("bus")
         self.submodules.analyzer = LiteScopeAnalyzer((self.bus), 512)
