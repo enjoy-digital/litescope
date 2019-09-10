@@ -229,7 +229,7 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, **kwargs):
+    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, csr_csv=None, **kwargs):
         # retro-compatibility # FIXME: remove
         if "cd" in kwargs:
             print("[WARNING] Please update LiteScopeAnalyzer's \"cd\" parameter to \"clock_domain\"")
@@ -240,6 +240,8 @@ class LiteScopeAnalyzer(Module, AutoCSR):
 
         self.data_width = data_width = max([sum([len(s)
             for s in g]) for g in groups.values()])
+
+        self.csr_csv = csr_csv
 
         # # #
 
@@ -302,3 +304,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             for s in signals:
                 r += format_line("signal", str(i), vns.get_name(s), str(len(s)))
         write_to_file(filename, r)
+
+    def do_exit(self, vns):
+        if self.csr_csv is not None:
+            self.export_csv(vns, self.csr_csv)
