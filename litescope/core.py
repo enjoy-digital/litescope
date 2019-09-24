@@ -147,8 +147,7 @@ class _Storage(Module, AutoCSR):
         self.offset = CSRStorage(bits_for(depth))
 
         self.mem_valid = CSRStatus()
-        self.mem_ready = CSR()
-        self.mem_data = CSRStatus(data_width)
+        self.mem_data  = CSRStatus(data_width)
 
         # # #
 
@@ -223,7 +222,7 @@ class _Storage(Module, AutoCSR):
         # memory read
         self.comb += [
             self.mem_valid.status.eq(cdc.source.valid),
-            cdc.source.ready.eq(self.mem_ready.re | ~self.enable.storage),
+            cdc.source.ready.eq(self.mem_data.we | ~self.enable.storage),
             self.mem_data.status.eq(cdc.source.data)
         ]
 

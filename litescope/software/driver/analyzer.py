@@ -125,8 +125,9 @@ class LiteScopeAnalyzerDriver:
                                                         ' ' * (20-20*position//length),
                                                         100*position//length))
                 sys.stdout.flush()
+            if not self.storage_mem_valid.read():
+                break
             self.data.append(self.storage_mem_data.read())
-            self.storage_mem_ready.write(1)
         if self.debug:
             print("")
         return self.data
