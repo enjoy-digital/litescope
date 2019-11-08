@@ -55,8 +55,9 @@ class Core(SoCCore):
             ident="Litescope example design",
             with_timer=False
         )
-        self.add_cpu_or_bridge(UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200))
-        self.add_wb_master(self.cpu.wishbone)
+        bridge = UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200)
+        self.submodules.bridge = bridge
+        self.add_wb_master(bridge.wishbone)
 
         self.bus = platform.request("bus")
         self.submodules.analyzer = LiteScopeAnalyzer((self.bus), 512)

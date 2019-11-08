@@ -114,9 +114,9 @@ class LiteScopeSoC(SoCCore):
         self.submodules.crg = _CRG(platform,sys_clk_freq)
 
         # bridge
-        self.add_cpu(UARTWishboneBridge(platform.request("serial"),
-            sys_clk_freq, baudrate=115200))
-        self.add_wb_master(self.cpu.wishbone)
+        bridge = UARTWishboneBridge(platform.request("serial"), sys_clk_freq, baudrate=115200)
+        self.submodules.bridge = bridge
+        self.add_wb_master(bridge.wishbone)
 
         # Litescope Analyzer
         analyzer_groups = {}
