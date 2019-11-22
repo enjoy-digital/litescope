@@ -246,10 +246,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
 
         # create scope clock domain
         self.clock_domains.cd_scope = ClockDomain()
-        self.comb += [
-            self.cd_scope.clk.eq(ClockSignal(clock_domain)),
-            self.cd_scope.rst.eq(ResetSignal(clock_domain))
-        ]
+        self.comb += self.cd_scope.clk.eq(ClockSignal(clock_domain))
 
         # mux
         self.submodules.mux = _Mux(data_width, len(groups))
