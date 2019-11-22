@@ -13,11 +13,12 @@ from litex.soc.interconnect.csr import *
 from litex.soc.cores.gpio import GPIOInOut
 from litex.soc.interconnect import stream
 
+# LiteScope IO -------------------------------------------------------------------------------------
 
 class LiteScopeIO(Module, AutoCSR):
     def __init__(self, data_width):
         self.data_width = data_width
-        self.input = Signal(data_width)
+        self.input  = Signal(data_width)
         self.output = Signal(data_width)
 
         # # #
@@ -27,6 +28,7 @@ class LiteScopeIO(Module, AutoCSR):
     def get_csrs(self):
         return self.gpio.get_csrs()
 
+# LiteScope Analyzer -------------------------------------------------------------------------------
 
 def core_layout(data_width):
     return [("data", data_width), ("hit", 1)]
@@ -34,30 +36,30 @@ def core_layout(data_width):
 
 class _Trigger(Module, AutoCSR):
     def __init__(self, data_width, depth=16):
-        self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.enable = CSRStorage()
-        self.done = CSRStatus()
+        self.done   = CSRStatus()
 
         self.mem_write = CSR()
-        self.mem_mask = CSRStorage(data_width)
+        self.mem_mask  = CSRStorage(data_width)
         self.mem_value = CSRStorage(data_width)
-        self.mem_full = CSRStatus()
+        self.mem_full  = CSRStatus()
 
         # # #
 
-        # control re-synchronization
-        enable = Signal()
+        # Control re-synchronization
+        enable   = Signal()
         enable_d = Signal()
         self.specials += MultiReg(self.enable.storage, enable, "scope")
         self.sync.scope += enable_d.eq(enable)
 
-        # status re-synchronization
+        # Status re-synchronization
         done = Signal()
         self.specials += MultiReg(done, self.done.status)
 
-        # memory and configuration
+        # Memory and configuration
         mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth)
         mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
         self.submodules += mem
@@ -68,8 +70,8 @@ class _Trigger(Module, AutoCSR):
             self.mem_full.status.eq(~mem.sink.ready)
         ]
 
-        # hit and memory read/flush
-        hit = Signal()
+        # Hit and memory read/flush
+        hit   = Signal()
         flush = WaitTimer(2*depth)
         self.submodules += flush
         self.comb += [
@@ -78,10 +80,10 @@ class _Trigger(Module, AutoCSR):
             mem.source.ready.eq((enable & hit) | ~flush.done),
         ]
 
-        # output
+        # Output
         self.comb += [
             sink.connect(source),
-            # we are done when mem is empty
+            # Done when all triggers have been consumed
             done.eq(~mem.source.valid),
             source.hit.eq(done)
         ]
@@ -89,7 +91,7 @@ class _Trigger(Module, AutoCSR):
 
 class _SubSampler(Module, AutoCSR):
     def __init__(self, data_width):
-        self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.value = CSRStorage(16)
@@ -100,8 +102,7 @@ class _SubSampler(Module, AutoCSR):
         self.specials += MultiReg(self.value.storage, value, "scope")
 
         counter = Signal(16)
-        done = Signal()
-
+        done    = Signal()
         self.sync.scope += \
             If(source.ready,
                 If(done,
@@ -120,7 +121,7 @@ class _SubSampler(Module, AutoCSR):
 
 class _Mux(Module, AutoCSR):
     def __init__(self, data_width, n):
-        self.sinks = sinks = [stream.Endpoint(core_layout(data_width)) for i in range(n)]
+        self.sinks  = sinks  = [stream.Endpoint(core_layout(data_width)) for i in range(n)]
         self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.value = CSRStorage(bits_for(n))
@@ -140,23 +141,19 @@ class _Storage(Module, AutoCSR):
     def __init__(self, data_width, depth):
         self.sink = sink = stream.Endpoint(core_layout(data_width))
 
-        self.enable = CSRStorage()
-        self.done = CSRStatus()
+        self.enable    = CSRStorage()
+        self.done      = CSRStatus()
 
-        self.length = CSRStorage(bits_for(depth))
-        self.offset = CSRStorage(bits_for(depth))
+        self.length    = CSRStorage(bits_for(depth))
+        self.offset    = CSRStorage(bits_for(depth))
 
         self.mem_valid = CSRStatus()
         self.mem_data  = CSRStatus(data_width)
 
         # # #
 
-
-        # control re-synchronization
-        enable = Signal()
-        enable_d = Signal()
-
-        enable = Signal()
+        # Control re-synchronization
+        enable   = Signal()
         enable_d = Signal()
         self.specials += MultiReg(self.enable.storage, enable, "scope")
         self.sync.scope += enable_d.eq(enable)
@@ -168,11 +165,11 @@ class _Storage(Module, AutoCSR):
             MultiReg(self.offset.storage, offset, "scope")
         ]
 
-        # status re-synchronization
+        # Status re-synchronization
         done = Signal()
         self.specials += MultiReg(done, self.done.status)
 
-        # memory
+        # Memory
         mem = stream.SyncFIFO([("data", data_width)], depth, buffered=True)
         mem = ClockDomainsRenamer("scope")(mem)
         cdc = stream.AsyncFIFO([("data", data_width)], 4)
@@ -180,12 +177,12 @@ class _Storage(Module, AutoCSR):
             {"write": "scope", "read": "sys"})(cdc)
         self.submodules += mem, cdc
 
-        # flush
+        # Flush
         mem_flush = WaitTimer(depth)
         mem_flush = ClockDomainsRenamer("scope")(mem_flush)
         self.submodules += mem_flush
 
-        # fsm
+        # FSM
         fsm = FSM(reset_state="IDLE")
         fsm = ClockDomainsRenamer("scope")(fsm)
         self.submodules += fsm
@@ -219,7 +216,7 @@ class _Storage(Module, AutoCSR):
             )
         )
 
-        # memory read
+        # Memory read
         self.comb += [
             self.mem_valid.status.eq(cdc.source.valid),
             cdc.source.ready.eq(self.mem_data.we | ~self.enable.storage),
@@ -235,20 +232,19 @@ class LiteScopeAnalyzer(Module, AutoCSR):
             clock_domain = kwargs["cd"]
 
         self.groups = groups = self.format_groups(groups)
-        self.depth = depth
+        self.depth  = depth
 
-        self.data_width = data_width = max([sum([len(s)
-            for s in g]) for g in groups.values()])
+        self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
 
         self.csr_csv = csr_csv
 
         # # #
 
-        # create scope clock domain
+        # Create scope clock domain
         self.clock_domains.cd_scope = ClockDomain()
         self.comb += self.cd_scope.clk.eq(ClockSignal(clock_domain))
 
-        # mux
+        # Mux
         self.submodules.mux = _Mux(data_width, len(groups))
         for i, signals in groups.items():
             self.comb += [
@@ -256,14 +252,14 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].data.eq(Cat(signals))
             ]
 
-        # frontend
+        # Frontend
         self.submodules.trigger = _Trigger(data_width, depth=trigger_depth)
         self.submodules.subsampler = _SubSampler(data_width)
 
-        # storage
+        # Storage
         self.submodules.storage = _Storage(data_width, depth)
 
-        # pipeline
+        # Pipeline
         self.submodules.pipeline = stream.Pipeline(
             self.mux.source,
             self.trigger,
