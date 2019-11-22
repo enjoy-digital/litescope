@@ -8,7 +8,7 @@ from math import cos, sin
 from litescope.software.dump import *
 
 #TODO:
-# - find a way to check if files are generated corectly
+# - find a way to check if files are generated correctly
 
 dump = Dump()
 for i in range(4):
