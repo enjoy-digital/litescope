@@ -225,12 +225,7 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, csr_csv=None, **kwargs):
-        # retro-compatibility # FIXME: remove
-        if "cd" in kwargs:
-            print("[WARNING] Please update LiteScopeAnalyzer's \"cd\" parameter to \"clock_domain\"")
-            clock_domain = kwargs["cd"]
-
+    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, csr_csv=None):
         self.groups = groups = self.format_groups(groups)
         self.depth  = depth
 
