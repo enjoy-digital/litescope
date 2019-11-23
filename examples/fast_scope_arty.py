@@ -3,16 +3,20 @@
 # This file is Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
 # License: BSD
 
+import sys
+
 from migen import *
+from migen.genlib.io import CRG, DifferentialInput
+
+from litex.build.generic_platform import *
+from litex.build.tools import write_to_file
 
 from litex.boards.platforms import arty
-from migen.genlib.io import CRG,DifferentialInput
+
 from litex.soc.integration.soc_core import SoCCore
 from litex.soc.cores.uart import UARTWishboneBridge
-from litex.build.generic_platform import Subsignal
-from litex.build.generic_platform import Pins
-from litex.build.generic_platform import IOStandard
 from litex.soc.cores.clock import *
+from litex.soc.integration import export
 
 from litescope import LiteScopeIO, LiteScopeAnalyzer
 
@@ -139,23 +143,13 @@ class LiteScopeSoC(SoCCore):
 platform = arty.Platform()
 
 soc = LiteScopeSoC(platform)
-vns = platform.build(soc)
+vns = platform.build(soc, run="no-compile" not in sys.argv[1:])
 
 #
 # Create csr and analyzer files
 #
 soc.finalize()
-csr_regions = soc.get_csr_regions()
-csr_constants = soc.get_constants()
-from litex.build.tools import write_to_file
-from litex.soc.integration import cpu_interface
 
-csr_csv = cpu_interface.get_csr_csv(csr_regions, csr_constants)
+csr_csv = export.get_csr_csv(soc.csr_regions, soc.constants)
 write_to_file("test/csr.csv", csr_csv)
 soc.do_exit(vns)
-
-
-#
-# Program
-#
-platform.create_programmer().load_bitstream("build/top.bit")
