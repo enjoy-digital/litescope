@@ -38,7 +38,7 @@ def _import(default, name):
 def _get_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,
         description="""\
-LiteScope - based on Migen.
+LiteScope - based on Migen & LiteX.
 
 This program builds and/or loads LiteScope components.
 One or several actions can be specified:
@@ -118,7 +118,7 @@ if __name__ == "__main__":
                               /_/
 
    A small footprint and configurable embedded FPGA
-       logic analyzer core powered by LiteX
+    logic analyzer core powered by Migen & LiteX
 
 ====== Building parameters: ======""")
 if hasattr(soc, "io"):
