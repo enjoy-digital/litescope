@@ -23,7 +23,7 @@ class SigrokDump(Dump):
         f.close()
 
     def write_metadata(self, name):
-        probe_bits = math.ceil(len(self.variables)/8)*8
+        probe_bits = math.ceil(sum(variable.width for variable in self.variables)/8)*8
         f = open("metadata", "w")
         r = """
 [global]
@@ -38,13 +38,20 @@ unitsize={}
         self.samplerate//1e6*2,
         probe_bits//8
     )
-        for i, variable in enumerate(self.variables):
-            r += "probe{}={}\n".format(i + 1, variable.name)
+        i = 1
+        for variable in self.variables:
+            if variable.width > 1:
+                for j in range(variable.width):
+                    r += "probe{}={}[{}]\n".format(i, variable.name, j)
+                    i += 1
+            else:
+                r += "probe{}={}\n".format(i, variable.name)
+                i += 1
         f.write(r)
         f.close()
 
     def write_data(self):
-        data_bits = math.ceil(len(self.variables)/8)*8
+        data_bits = math.ceil(sum(variable.width for variable in self.variables)/8)*8
         data_len = 0
         for variable in self.variables:
             data_len = max(data_len, len(variable))
@@ -52,9 +59,9 @@ unitsize={}
         for i in range(data_len):
             data = 0
             for j, variable in enumerate(reversed(self.variables)):
-                data = data << 1
+                data = data << variable.width
                 try:
-                    data |= variable.values[i] & 0x1 # 1 bit probes
+                    data |= variable.values[i]
                 except:
                     pass
             datas.append(data)
