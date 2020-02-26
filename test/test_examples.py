@@ -16,7 +16,7 @@ class TestExamples(unittest.TestCase):
         os.system("python3 {} -t simple -p de0nano -Ob run False build-bitstream".format(make_script))
         self.assertEqual(os.path.isfile("{}/build/litescopesoc_de0nano.v".format(root_dir)), True)
 
-    def test_simple_705(self):
+    def test_simple_kc705(self):
         os.system("rm -rf {}/build".format(root_dir))
         os.system("python3 {} -t simple -p kc705 -Ob run False build-bitstream".format(make_script))
         self.assertEqual(os.path.isfile("{}/build/litescopesoc_kc705.v".format(root_dir)), True)

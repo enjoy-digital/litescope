@@ -2,15 +2,13 @@
 # License: BSD
 
 from migen import *
-from migen.genlib.io import CRG
 
 from targets import *
 
 from litex.build.generic_platform import *
 from litex.build.xilinx.platform import XilinxPlatform
 
-from litex.soc.integration.soc_core import SoCCore
-from litex.soc.cores.uart import UARTWishboneBridge
+from litex.soc.integration.soc_core import SoCMini
 
 from litescope import LiteScopeAnalyzer
 
@@ -25,41 +23,27 @@ _io = [
     ("bus", 0, Pins(128))
 ]
 
+
 class CorePlatform(XilinxPlatform):
     name = "core"
-    default_clk_name = "sys_clk"
     def __init__(self):
         XilinxPlatform.__init__(self, "", _io)
 
-    def do_finalize(self, *args, **kwargs):
-        pass
 
-
-class Core(SoCCore):
+class Core(SoCMini):
     platform = CorePlatform()
-    csr_map = {
-        "analyzer":    16
-    }
-    csr_map.update(SoCCore.csr_map)
-
     def __init__(self, platform, clk_freq=100*1000000):
         self.clock_domains.cd_sys = ClockDomain("sys")
         self.comb += [
             self.cd_sys.clk.eq(platform.request("sys_clock")),
             self.cd_sys.rst.eq(platform.request("sys_reset"))
         ]
-        SoCCore.__init__(self, platform, clk_freq,
-            cpu_type=None,
-            csr_data_width=32,
-            with_uart=False,
-            ident="Litescope example design",
-            with_timer=False
+        SoCMini.__init__(self, platform, clk_freq, csr_data_width=32,
+            with_uart=True, uart_name="bridge",
+            ident="Litescope example design", ident_version=True,
         )
-        bridge = UARTWishboneBridge(platform.request("serial"), clk_freq, baudrate=115200)
-        self.submodules.bridge = bridge
-        self.add_wb_master(bridge.wishbone)
 
-        self.bus = platform.request("bus")
-        self.submodules.analyzer = LiteScopeAnalyzer((self.bus), 512)
+        self.submodules.analyzer = LiteScopeAnalyzer(platform.request("bus"), 512)
+        self.add_csr("analyzer")
 
 default_subtarget = Core
