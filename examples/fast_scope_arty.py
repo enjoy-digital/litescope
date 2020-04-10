@@ -6,10 +6,9 @@
 import sys
 
 from migen import *
-from migen.genlib.io import CRG
 
 from litex.build.generic_platform import *
-from litex.build.io import DifferentialInput
+from litex.build.io import DifferentialInput, CRG
 from litex.build.tools import write_to_file
 
 from litex.boards.platforms import arty
