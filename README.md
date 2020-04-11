@@ -1,12 +1,17 @@
-             __   _ __      ____
-            / /  (_) /____ / __/______  ___  ___
-           / /__/ / __/ -_)\ \/ __/ _ \/ _ \/ -_)
-          /____/_/\__/\__/___/\__/\___/ .__/\__/
-                                     /_/
-           Copyright 2015-2019 / EnjoyDigital
+```
+                                 __   _ __      ____
+                                / /  (_) /____ / __/______  ___  ___
+                               / /__/ / __/ -_)\ \/ __/ _ \/ _ \/ -_)
+                              /____/_/\__/\__/___/\__/\___/ .__/\__/
+                                                         /_/
+                               Copyright 2015-2020 / EnjoyDigital
 
-       A small footprint and configurable Logic Analyzer
-                core powered by Migen & LiteX
+                           A small footprint and configurable Logic Analyzer
+                                    core powered by Migen & LiteX
+```
+
+[![](https://travis-ci.com/enjoy-digital/litescope.svg?branch=master)](https://travis-ci.com/enjoy-digital/litescope) ![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)
+
 
 [> Intro
 --------
@@ -55,13 +60,18 @@ enjoy-digital.fr.
 
 [> Getting started
 ------------------
-1. Install Python3 and your vendor's software
+1. Install Python 3.6+ and FPGA vendor's development tools.
+2. Install Migen/LiteX and the LiteX's cores:
 
-2. Obtain LiteX and install it:
-  git clone https://github.com/enjoy-digital/litex --recursive
-  cd litex
-  python3 setup.py develop
-  cd ..
+```sh
+$ wget https://raw.githubusercontent.com/enjoy-digital/litex/master/litex_setup.py
+$ chmod +x litex_setup.py
+$ ./litex_setup.py init install --user (--user to install to user directory)
+```
+  Later, if you need to update all repositories:
+```sh
+$ ./litex_setup.py update
+```
 
 3. TODO: add/describe examples
 
@@ -69,9 +79,14 @@ enjoy-digital.fr.
 --------
 Unit tests are available in ./test/.
 To run all the unit tests:
-  ./setup.py test
+```sh
+$ ./setup.py test
+```
+
 Tests can also be run individually:
-  python3 -m unittest test.test_name
+```sh
+$ python3 -m unittest test.test_name
+```
 
 [> License
 ----------
