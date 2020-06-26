@@ -53,7 +53,7 @@ class LiteScopeSoC(SoCMini):
         analyzer_groups[1] = [
             platform.lookup_request("serial").tx,
             platform.lookup_request("serial").rx,
-            self.bus.masters["uart_bridge"],
+            self.bus.masters["uartbone"],
         ]
 
         # FSM group
