@@ -28,7 +28,7 @@ class Finder:
         self.signals = signals
 
     def __getitem__(self, name):
-        scores = {s: 0 for s in signals}
+        scores = {s: 0 for s in self.signals}
         # exact match
         if name in scores:
             print("Exact:", name)
@@ -36,7 +36,7 @@ class Finder:
         # substring
         pattern = re.compile(name)
         max_score = 0
-        for s in signals:
+        for s in self.signals:
             match = pattern.search(s)
             if match:
                 scores[s] = match.end() - match.start()
