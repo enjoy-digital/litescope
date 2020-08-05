@@ -11,6 +11,12 @@ install:
   - cd $TRAVIS_BUILD_DIR
   - python3 setup.py install
 
+before_script:
+  # Get RISC-V toolchain
+  - wget https://static.dev.sifive.com/dev-tools/riscv64-unknown-elf-gcc-20171231-x86_64-linux-centos6.tar.gz
+  - tar -xvf riscv64-unknown-elf-gcc-20171231-x86_64-linux-centos6.tar.gz
+  - export PATH=$PATH:$PWD/riscv64-unknown-elf-gcc-20171231-x86_64-linux-centos6/bin/
+
 script:
   - cd $TRAVIS_BUILD_DIR
   - python setup.py test
