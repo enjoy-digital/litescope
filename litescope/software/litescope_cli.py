@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # This file is Copyright (c) 2020 Antmicro <www.antmicro.com>
+# This file is Copyright (c) 2020 Florent Kermarrec <florent@enjoy-digital.fr>
 # License: BSD
 
 import re
@@ -88,7 +89,7 @@ def add_triggers(args, analyzer, signals):
         added = True
     return added
 
-if __name__ == "__main__":
+def main():
     args = parse_args()
 
     signals = get_signals("analyzer.csv")
@@ -113,3 +114,6 @@ if __name__ == "__main__":
         analyzer.save("dump.vcd")
     finally:
         wb.close()
+
+if __name__ == "__main__":
+    main()
