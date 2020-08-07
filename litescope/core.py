@@ -208,11 +208,11 @@ class _Storage(Module, AutoCSR):
             If(sink.valid & sink.hit,
                 NextState("RUN")
             ),
-            mem.source.ready.eq(mem.level >= self.offset.storage)
+            mem.source.ready.eq(mem.level >= offset)
         )
         fsm.act("RUN",
             sink.connect(mem.sink, omit={"hit"}),
-            If(mem.level >= self.length.storage,
+            If(mem.level >= length,
                 NextState("IDLE"),
             )
         )
