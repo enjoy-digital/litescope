@@ -1,6 +1,9 @@
-# This file is Copyright (c) 2015-2019 Florent Kermarrec <florent@enjoy-digital.fr>
-# This file is Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
-# License: BSD
+#
+# This file is part of LiteScope.
+#
+# Copyright (c) 2015-2019 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
+# SPDX-License-Identifier: BSD-2-Clause
 
 def dec2bin(d, width=0):
     if d == "x":

@@ -1,7 +1,10 @@
-# This file is Copyright (c) 2015-2018 Florent Kermarrec <florent@enjoy-digital.fr>
-# This file is Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
-# This file is Copyright (c) 2018 Sean Cross <sean@xobs.io>
-# License: BSD
+#
+# This file is part of LiteScope.
+#
+# Copyright (c) 2015-2018 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
+# Copyright (c) 2018 Sean Cross <sean@xobs.io>
+# SPDX-License-Identifier: BSD-2-Clause
 
 import os
 import sys

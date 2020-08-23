@@ -1,5 +1,8 @@
-# This file is Copyright (c) 2015 Florent Kermarrec <florent@enjoy-digital.fr>
-# License: BSD
+#
+# This file is part of LiteScope.
+#
+# Copyright (c) 2015 Florent Kermarrec <florent@enjoy-digital.fr>
+# SPDX-License-Identifier: BSD-2-Clause
 
 from litescope.software.dump.common import Dump, dec2bin
 

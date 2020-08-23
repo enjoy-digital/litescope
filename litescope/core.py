@@ -1,7 +1,10 @@
-# This file is Copyright (c) 2016-2019 Florent Kermarrec <florent@enjoy-digital.fr>
-# This file is Copyright (c) 2018 bunnie <bunnie@kosagi.com>
-# This file is Copyright (c) 2016 Tim 'mithro' Ansell <mithro@mithis.com>
-# License: BSD
+#
+# This file is part of LiteScope.
+#
+# Copyright (c) 2016-2019 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2018 bunnie <bunnie@kosagi.com>
+# Copyright (c) 2016 Tim 'mithro' Ansell <mithro@mithis.com>
+# SPDX-License-Identifier: BSD-2-Clause
 
 from migen import *
 from migen.genlib.misc import WaitTimer
