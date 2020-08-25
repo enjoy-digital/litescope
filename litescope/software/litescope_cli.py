@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("-v", "--value-trigger", action="append", nargs=2, help="Add conditional trigger with given value",
                         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
+    parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling.")
     parser.add_argument("--offset",              default="32",             help="Capture Offset.")
     parser.add_argument("--length",              default="128",            help="Capture Length.")
     args = parser.parse_args()
@@ -107,6 +108,7 @@ def main():
     try:
         analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
         analyzer.configure_group(0)
+        analyzer.configure_subsampler(int(args.subsampling, 0))
         if not add_triggers(args, analyzer, signals):
             print("WARNING: no trigger added!")
 
