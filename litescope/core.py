@@ -162,12 +162,10 @@ class _Storage(Module, AutoCSR):
         self.specials += MultiReg(self.enable.storage, enable, "scope")
         self.sync.scope += enable_d.eq(enable)
 
-        length = Signal(max=depth)
-        offset = Signal(max=depth)
-        self.specials += [
-            MultiReg(self.length.storage, length, "scope"),
-            MultiReg(self.offset.storage, offset, "scope")
-        ]
+        length = Signal().like(self.length.storage)
+        offset = Signal().like(self.offset.storage)
+        self.specials += MultiReg(self.length.storage, length, "scope")
+        self.specials += MultiReg(self.offset.storage, offset, "scope")
 
         # Status re-synchronization
         done = Signal()
