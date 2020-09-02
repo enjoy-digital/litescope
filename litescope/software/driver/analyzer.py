@@ -80,7 +80,7 @@ class LiteScopeAnalyzerDriver:
         if cond is not None:
             for k, v in cond.items():
                 value |= getattr(self, k + "_o")*v
-                mask |= getattr(self, k + "_m")
+                mask  |= getattr(self, k + "_m")
         self.trigger_mem_mask.write(mask)
         self.trigger_mem_value.write(value)
         self.trigger_mem_write.write(1)

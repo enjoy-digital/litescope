@@ -80,7 +80,7 @@ class _Trigger(Module, AutoCSR):
         self.submodules += flush
         self.comb += [
             flush.wait.eq(~(~enable & enable_d)), # flush when disabling
-            hit.eq((sink.data & mem.source.mask) == mem.source.value),
+            hit.eq((sink.data & mem.source.mask) == (mem.source.value & mem.source.mask)),
             mem.source.ready.eq((enable & hit) | ~flush.done),
         ]
 
@@ -91,7 +91,6 @@ class _Trigger(Module, AutoCSR):
             done.eq(~mem.source.valid),
             source.hit.eq(done)
         ]
-
 
 class _SubSampler(Module, AutoCSR):
     def __init__(self, data_width):
