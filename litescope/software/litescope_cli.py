@@ -64,7 +64,7 @@ def parse_args():
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
     parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling.")
     parser.add_argument("--offset",              default="32",             help="Capture Offset.")
-    parser.add_argument("--length",              default="128",            help="Capture Length.")
+    parser.add_argument("--length",              default=None,             help="Capture Length.")
     args = parser.parse_args()
     return args
 
@@ -112,7 +112,10 @@ def main():
         if not add_triggers(args, analyzer, signals):
             print("WARNING: no trigger added!")
 
-        analyzer.run(offset=int(args.offset, 0), length=int(args.length, 0))
+        analyzer.run(
+            offset = int(args.offset, 0),
+            length = None if args.length is None else int(args.length, 0)
+        )
 
         analyzer.wait_done()
         analyzer.upload()
