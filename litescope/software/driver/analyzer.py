@@ -32,7 +32,10 @@ class LiteScopeAnalyzerDriver:
         self.group = 0
         self.data = DumpData(self.data_width)
 
-        # disable trigger and storage
+        self.offset = 0
+        self.length = None
+
+        # Disable trigger and storage
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
 
@@ -104,6 +107,8 @@ class LiteScopeAnalyzerDriver:
             length = self.depth
         assert offset < self.depth
         assert length <= self.depth
+        self.offset = offset
+        self.length = length
         if self.debug:
             print("[running]...")
         self.storage_offset.write(offset)
@@ -124,7 +129,7 @@ class LiteScopeAnalyzerDriver:
         length = self.storage_length.read()
         for position in range(1, length + 1):
             if self.debug:
-                sys.stdout.write("|{}>{}| {}%\r".format('=' * (20*position//length),
+                sys.stdout.write("[{}>{}] {}%\r".format('=' * (20*position//length),
                                                         ' ' * (20-20*position//length),
                                                         100*position//length))
                 sys.stdout.flush()
@@ -153,6 +158,8 @@ class LiteScopeAnalyzerDriver:
             dump.add_from_layout(self.layouts[self.group], self.data)
         else:
             dump.add_from_layout_flatten(self.layouts[self.group], self.data)
+        dump.add_scope_clk()
+        dump.add_scope_trig(self.offset)
         dump.write(filename)
 
     def get_instant_value(self, group, name):

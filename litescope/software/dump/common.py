@@ -77,7 +77,6 @@ class Dump:
             values2x = [values[i//2] for i in range(len(values)*2)]
             self.add(DumpVariable(name, sample_width, values2x))
             offset += sample_width
-        self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
 
     def add_from_layout_flatten(self, layout, variable):
         offset = 0
@@ -85,13 +84,16 @@ class Dump:
             # The samples from the logic analyzer end up in an array of size sample size
             # and have n (number of channel) bits. The following does a bit slice on the array
             # elements (implemented above)
-            values = variable[offset:offset+sample_width]
+            values         = variable[offset:offset+sample_width]
             values_flatten = [values[i//sample_width] >> (i % sample_width ) & 1 for i in range(len(values)*sample_width)]
             self.add(DumpVariable(name, 1, values_flatten))
             offset += sample_width
-        # the clock.. might need some more love here. the clock pattern probably should be sample_width wide
-        # e.g. 11110000 and not 10101010
+
+    def add_scope_clk(self):
         self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
+
+    def add_scope_trig(self, offset):
+        self.add(DumpVariable("scope_trig", 1, [0]*offset + [1]*(len(self)-offset)))
 
     def __len__(self):
         l = 0
