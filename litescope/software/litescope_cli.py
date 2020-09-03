@@ -85,7 +85,6 @@ def add_triggers(args, analyzer, signals):
     cond = {}
     for signal, value in args.value_trigger or []:
         name = finder[signal]
-        value = int(value, 0)
         cond[finder[signal]] = value
         print(f"Condition: {name} == {value}")
     if cond:

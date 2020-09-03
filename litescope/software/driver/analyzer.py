@@ -8,7 +8,7 @@
 
 import os
 import sys
-
+import re
 
 from migen import *
 
@@ -82,8 +82,26 @@ class LiteScopeAnalyzerDriver:
             raise ValueError("Trigger memory full, too much conditions")
         if cond is not None:
             for k, v in cond.items():
-                value |= getattr(self, k + "_o")*v
-                mask  |= getattr(self, k + "_m")
+                # Check for binary/hexa expressions
+                mb = re.match("0b([01x]+)",  v)
+                mx = re.match("0x([0-fx]+)", v)
+                m  = mb or mx
+                if m is not None:
+                    b = m.group(1)
+                    v = 0
+                    m = 0
+                    for c in b:
+                        v <<= 4 if mx is not None else 1
+                        m <<= 4 if mx is not None else 1
+                        if c != "x":
+                            v |= int(c)
+                            m |= 0xf if mx is not None else 0b1
+                    value |= getattr(self, k + "_o")*v
+                    mask  |= getattr(self, k + "_m") & (getattr(self, k + "_o")*m)
+                # Else convert to int
+                else:
+                    value |= getattr(self, k + "_o")*int(v, 0)
+                    mask  |= getattr(self, k + "_m")
         self.trigger_mem_mask.write(mask)
         self.trigger_mem_value.write(value)
         self.trigger_mem_write.write(1)
