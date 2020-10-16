@@ -17,13 +17,13 @@ from litescope import LiteScopeAnalyzerDriver
 
 # Helpers ------------------------------------------------------------------------------------------
 
-def get_signals(csvname):
+def get_signals(csvname, group):
     signals = []
     with open(csvname) as f:
         reader = csv.reader(f, delimiter=",", quotechar="#")
-        for typ, group, name, value in reader:
-            if typ == "signal":
-                signals.append(name)
+        for t, g, n, v in reader:
+            if t == "signal" and g == group:
+                signals.append(n)
     return signals
 
 class Finder:
@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("-v", "--value-trigger", action="append", nargs=2, help="Add conditional trigger with given value",
                         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
+    parser.add_argument("--group",               default="0",              help="Capture Group.")
     parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling.")
     parser.add_argument("--offset",              default="32",             help="Capture Offset.")
     parser.add_argument("--length",              default=None,             help="Capture Length.")
@@ -95,7 +96,7 @@ def add_triggers(args, analyzer, signals):
 def main():
     args = parse_args()
 
-    signals = get_signals("analyzer.csv")
+    signals = get_signals("analyzer.csv", args.group)
     if args.list:
         for signal in signals:
             print(signal)
@@ -106,7 +107,7 @@ def main():
 
     try:
         analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
-        analyzer.configure_group(0)
+        analyzer.configure_group(int(args.group, 0))
         analyzer.configure_subsampler(int(args.subsampling, 0))
         if not add_triggers(args, analyzer, signals):
             print("WARNING: no trigger added!")
