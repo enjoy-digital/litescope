@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument("-v", "--value-trigger", action="append", nargs=2, help="Add conditional trigger with given value",
                         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
+    parser.add_argument("--name",                default="analyzer",       help="Analyzer Name.")
     parser.add_argument("--group",               default="0",              help="Capture Group.")
     parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling.")
     parser.add_argument("--offset",              default="32",             help="Capture Offset.")
@@ -96,7 +97,7 @@ def add_triggers(args, analyzer, signals):
 def main():
     args = parse_args()
 
-    signals = get_signals("analyzer.csv", args.group)
+    signals = get_signals(args.name + ".csv", args.group)
     if args.list:
         for signal in signals:
             print(signal)
@@ -106,7 +107,7 @@ def main():
     wb.open()
 
     try:
-        analyzer = LiteScopeAnalyzerDriver(wb.regs, "analyzer", debug=True)
+        analyzer = LiteScopeAnalyzerDriver(wb.regs, args.name, debug=True)
         analyzer.configure_group(int(args.group, 0))
         analyzer.configure_subsampler(int(args.subsampling, 0))
         if not add_triggers(args, analyzer, signals):
