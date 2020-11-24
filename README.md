@@ -10,7 +10,7 @@
                                     core powered by Migen & LiteX
 ```
 
-[![](https://travis-ci.com/enjoy-digital/litescope.svg?branch=master)](https://travis-ci.com/enjoy-digital/litescope) ![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)
+[![](https://github.com/enjoy-digital/litescope/workflows/ci/badge.svg)](https://github.com/enjoy-digital/litescope/actions) ![License](https://img.shields.io/badge/License-BSD%202--Clause-orange.svg)
 
 
 [> Intro
