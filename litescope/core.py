@@ -226,7 +226,7 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, csr_csv=None):
+    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, csr_csv="analyzer.csv"):
         self.groups = groups = self.format_groups(groups)
         self.depth  = depth
 
