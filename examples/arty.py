@@ -21,8 +21,8 @@ import argparse
 
 from migen import *
 
-from litex.boards.platforms import arty
-from litex.boards.targets.arty import *
+from litex_boards.platforms import arty
+from litex_boards.targets.arty import *
 
 from litescope import LiteScopeAnalyzer
 
