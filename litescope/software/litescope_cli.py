@@ -135,7 +135,7 @@ def main():
         analyzer.upload()
         analyzer.save(args.dump)
 
-    # Close remove control.M#
+    # Close remove control.
     finally:
         bus.close()
 
