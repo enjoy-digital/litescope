@@ -84,6 +84,7 @@ def parse_args():
         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file")
+    parser.add_argument("--csr-csv",             default="csr.csv",        help="csr CSV file")
     parser.add_argument("--group",               default="0",              help="Capture Group")
     parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling")
     parser.add_argument("--offset",              default="32",             help="Capture Offset")
@@ -112,12 +113,12 @@ def main():
         sys.exit(0)
 
     # Create and open remote control.
-    bus = RemoteClient()
+    bus = RemoteClient(csr_csv=args.csr_csv)
     bus.open()
 
     # Configure and run LiteScope analyzer.
     try:
-        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, debug=True)
+        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, args.csv, debug=True)
         analyzer.configure_group(int(args.group, 0))
         analyzer.configure_subsampler(int(args.subsampling, 0))
         if not add_triggers(args, analyzer, signals):
