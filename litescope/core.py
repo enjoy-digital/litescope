@@ -226,7 +226,7 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, register=0, csr_csv="analyzer.csv"):
+    def __init__(self, groups, depth, clock_domain="sys", trigger_depth=16, register=False, csr_csv="analyzer.csv"):
         self.groups = groups = self.format_groups(groups)
         self.depth  = depth
 
@@ -245,7 +245,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
         sd = getattr(self.sync, clock_domain)
         for i, signals in groups.items():
             s = Cat(signals)
-            for _ in range(register):
+            if register:
                 s_d = Signal(len(s))
                 sd += s_d.eq(s)
                 s = s_d
