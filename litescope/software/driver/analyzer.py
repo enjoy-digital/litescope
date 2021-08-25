@@ -134,6 +134,13 @@ class LiteScopeAnalyzerDriver:
         self.storage_enable.write(1)
         self.trigger_enable.write(1)
 
+    def clear(self):
+        self.data = DumpData(self.data_width)
+        self.offset = 0
+        self.length = None
+        self.trigger_enable.write(0)
+        self.storage_enable.write(0)
+
     def done(self):
         return self.storage_done.read()
 
