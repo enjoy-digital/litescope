@@ -168,6 +168,8 @@ class LiteScopeAnalyzerDriver:
             dump = CSVDump()
         elif ext == ".py":
             dump = PythonDump()
+        elif ext == ".json":
+            dump = JSONDump()
         elif ext == ".sr":
             dump = SigrokDump(samplerate=samplerate)
         else:
