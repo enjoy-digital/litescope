@@ -22,4 +22,4 @@ class JSONDump(Dump):
             json.dump(self.generate_data(), f)
 
     def read(self, filename):
-        raise NotImplementedError("Python files can not (yet) be read, please contribute!")
+        raise NotImplementedError("JSON files can not (yet) be read, please contribute!")
