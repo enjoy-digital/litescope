@@ -16,4 +16,3 @@ class TestExamples(unittest.TestCase):
         os.system(f"rm -rf {root_dir}/build")
         os.system(f"cd {root_dir}/examples && python3 arty.py")
         self.assertEqual(os.path.isfile(f"{root_dir}/examples/build/digilent_arty/gateware/digilent_arty.v"), True)
-

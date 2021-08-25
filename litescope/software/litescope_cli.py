@@ -84,6 +84,7 @@ def parse_args():
         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file")
+    parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file")
     parser.add_argument("--group",               default="0",              help="Capture Group")
     parser.add_argument("--subsampling",         default="1",              help="Capture Subsampling")
     parser.add_argument("--offset",              default="32",             help="Capture Offset")
@@ -99,7 +100,8 @@ def main():
 
     # Check if analyzer file is present and exit if not.
     if not os.path.exists(args.csv):
-        raise ValueError("{} not found, exiting.".format(args.csv))
+        raise ValueError("{} not found. This is necessary to load the wires which have been tapped to scope."
+                         "Try setting --csv to value of the csr_csv argument to LiteScopeAnalyzer in the SoC.".format(args.csv))
         sys.exit(1)
 
     # Get list of signals from analyzer configuratio file.
@@ -112,7 +114,10 @@ def main():
         sys.exit(0)
 
     # Create and open remote control.
-    bus = RemoteClient()
+    if not os.path.exists(args.csr_csv):
+        raise ValueError("{} not found. This is necessary to load the 'regs' of the remote. Try setting --csr-csv here to "
+                         "the path to the --csr-csv argument of the SoC build.".format(args.csr_csv))
+    bus = RemoteClient(csr_csv=args.csr_csv)
     bus.open()
 
     # Configure and run LiteScope analyzer.

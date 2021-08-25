@@ -94,7 +94,7 @@ class LiteScopeAnalyzerDriver:
                         v <<= 4 if mx is not None else 1
                         m <<= 4 if mx is not None else 1
                         if c != "x":
-                            v |= int(c)
+                            v |= int(c, 16 if mx is not None else 2 )
                             m |= 0xf if mx is not None else 0b1
                     value |= getattr(self, k + "_o")*v
                     mask  |= getattr(self, k + "_m") & (getattr(self, k + "_o")*m)
