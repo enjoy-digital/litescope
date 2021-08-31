@@ -4,7 +4,7 @@
                                / /__/ / __/ -_)\ \/ __/ _ \/ _ \/ -_)
                               /____/_/\__/\__/___/\__/\___/ .__/\__/
                                                          /_/
-                               Copyright 2015-2020 / EnjoyDigital
+                               Copyright 2015-2021 / EnjoyDigital
 
                            A small footprint and configurable Logic Analyzer
                                     core powered by Migen & LiteX
