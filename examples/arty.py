@@ -48,6 +48,7 @@ class LiteScopeSoC(BaseSoC):
         self.submodules.analyzer = LiteScopeAnalyzer(analyzer_signals,
             depth        = 1024,
             clock_domain = "sys",
+            samplerate   = self.sys_clk_freq,
             csr_csv      = "analyzer.csv")
         self.add_csr("analyzer")
 

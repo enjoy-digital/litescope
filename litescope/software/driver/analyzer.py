@@ -118,6 +118,7 @@ class LiteScopeAnalyzerDriver:
         self.add_trigger(value, mask, cond)
 
     def configure_subsampler(self, value):
+        self.subsampling = value
         self.subsampler_value.write(value-1)
 
     def run(self, offset=0, length=None):
@@ -166,11 +167,13 @@ class LiteScopeAnalyzerDriver:
         return self.data
 
     def save(self, filename, samplerate=None, flatten=False):
+        if samplerate is None:
+            samplerate = self.samplerate / self.subsampling
         if self.debug:
             print("[writing to " + filename + "]...")
         name, ext = os.path.splitext(filename)
         if ext == ".vcd":
-            dump = VCDDump()
+            dump = VCDDump(samplerate=samplerate)
         elif ext == ".csv":
             dump = CSVDump()
         elif ext == ".py":

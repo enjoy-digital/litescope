@@ -6,6 +6,7 @@
 
 from itertools import count
 import datetime
+import re
 from litescope.software.dump.common import Dump, dec2bin
 
 
@@ -19,14 +20,37 @@ def vcd_codes():
             code = codechars[r] + code
         yield code
 
+_si_prefix2exp = {
+    "":    0,
+    "m":  -3,
+    "u":  -6,
+    "n":  -9,
+    "p": -12,
+    "f": -15,
+}
+
+def _timescale_str2num(timescale):
+    match = re.fullmatch("(\d+)(\w{0,1})s", timescale)
+    num = int(match.group(1))
+    si_prefix = match.group(2)
+    exp = _si_prefix2exp[si_prefix]
+    return num * 10**exp, si_prefix
+
 
 class VCDDump(Dump):
-    def __init__(self, dump=None, timescale="1ps", comment=""):
+    def __init__(self, dump=None, samplerate=1e-12, timescale="1ps", comment=""):
         Dump.__init__(self)
         self.variables = [] if dump is None else dump.variables
         self.timescale = timescale
         self.comment = comment
         self.cnt = -1
+        # rescale the timescale from the provided one to one where it is equal to the samplerate
+        # this lets us output sequential change timestamps which helps with software like PulseView
+        # that slow down if a much smaller timescale than necessary is used
+        timescale_seconds, si_prefix = _timescale_str2num(timescale)
+        # factor of 2 scale is because of 2x samples from fake clock
+        self.count_timescale = int(1 / (timescale_seconds * samplerate * 2))
+        self.timescale_unit_str = si_prefix + "s"
 
     def change(self):
         r = ""
@@ -65,14 +89,12 @@ class VCDDump(Dump):
 
     def generate_timescale(self):
         r = "$timescale "
-        r += self.timescale
+        r += str(self.count_timescale) + self.timescale_unit_str
         r += " $end\n"
         return r
 
     def generate_vars(self):
-        r = "$scope "
-        r += self.timescale
-        r += " $end\n"
+        r = "$scope dumped_signals $end\n"
         for v in self.variables:
             r += "$var wire "
             r += str(v.width)
