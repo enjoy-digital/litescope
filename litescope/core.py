@@ -226,10 +226,10 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, samplerate=1e-12, clock_domain="sys", trigger_depth=16, register=False, csr_csv="analyzer.csv"):
+    def __init__(self, groups, depth, samplerate=1e12, clock_domain="sys", trigger_depth=16, register=False, csr_csv="analyzer.csv"):
         self.groups     = groups = self.format_groups(groups)
         self.depth      = depth
-        self.samplerate = samplerate
+        self.samplerate = int(samplerate)
 
         self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
 
