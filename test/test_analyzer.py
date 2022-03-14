@@ -33,19 +33,19 @@ class TestAnalyzer(unittest.TestCase):
             # Wait capture
             while not (yield from dut.analyzer.storage.done.read()):
                 yield
-            # Reade captured datas
-            while (yield from dut.analyzer.storage.mem_valid.read()):
+            # Read captured datas
+            while (yield from dut.analyzer.storage.mem_level.read()) > 0:
                 dut.data.append((yield from dut.analyzer.storage.mem_data.read()))
                 yield
 
         class DUT(Module):
             def __init__(self):
-                counter = Signal(16)
+                counter = Signal(32)
                 self.sync += counter.eq(counter + 1)
                 self.submodules.analyzer = LiteScopeAnalyzer(counter, 512)
 
         dut = DUT()
         generators = {"sys" : [generator(dut)]}
         clocks     = {"sys": 10, "scope": 10}
-        run_simulation(dut, generators, clocks)
-        self.assertEqual(dut.data, [524 + 3*i for i in range(256)])
+        run_simulation(dut, generators, clocks, vcd_name="sim.vcd")
+        self.assertEqual(dut.data, [524 + 3*i for i in range(len(dut.data))])
