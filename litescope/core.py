@@ -227,7 +227,7 @@ class _Storage(Module, AutoCSR):
             pad_bits = - data_width % read_width
             self.submodules.w_conv = w_conv = stream.Converter(data_width + pad_bits, read_width)
             self.comb += [
-                self.w_conv.sink.data.eq(Cat(cdc.source.data, Constant(0, pad_bits))),
+                self.w_conv.sink.data.eq(cdc.source.data),
                 self.w_conv.sink.valid.eq(cdc.source.valid),
                 cdc.source.ready.eq(self.w_conv.sink.ready),
             ]
