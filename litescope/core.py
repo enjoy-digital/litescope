@@ -223,17 +223,15 @@ class _Storage(Module, AutoCSR):
         )
 
         # Memory read
+        read_source = stream.Endpoint([("data", data_width)])
         if data_width > read_width:
             pad_bits = - data_width % read_width
-            self.submodules.w_conv = w_conv = stream.Converter(data_width + pad_bits, read_width)
-            self.comb += [
-                self.w_conv.sink.data.eq(cdc.source.data),
-                self.w_conv.sink.valid.eq(cdc.source.valid),
-                cdc.source.ready.eq(self.w_conv.sink.ready),
-            ]
-            read_source = w_conv.source
+            w_conv = stream.Converter(data_width + pad_bits, read_width)
+            self.submodules += w_conv
+            self.comb += cdc.source.connect(w_conv.sink)
+            self.comb += w_conv.source.connect(read_source)
         else:
-            read_source = cdc.source
+            self.comb += cdc.source.connect(read_source)
 
         self.comb += [
             read_source.ready.eq(self.mem_data.we | ~self.enable.storage),
