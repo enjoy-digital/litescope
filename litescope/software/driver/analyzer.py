@@ -152,16 +152,31 @@ class LiteScopeAnalyzerDriver:
     def upload(self):
         if self.debug:
             print("[uploading]...")
-        length = self.storage_length.read()
-        for position in range(1, length + 1):
-            if self.debug:
-                sys.stdout.write("[{}>{}] {}%\r".format('=' * (20*position//length),
-                                                        ' ' * (20-20*position//length),
-                                                        100*position//length))
-                sys.stdout.flush()
-            if not self.storage_mem_valid.read():
-                break
-            self.data.append(self.storage_mem_data.read())
+
+        length = self.storage_mem_level.read()
+        remaining = length
+        swpw = (self.data_width + 31) // 32 # Sub-Words per word
+        mwbl = 192 // swpw                  # Max Burst len (in # of words)
+
+        while remaining > 0:
+            rdw  = min(remaining, mwbl)
+            rdsw = rdw * swpw
+            datas = self.storage_mem_data.readfn(self.storage_mem_data.addr, length=rdsw, burst="fixed")
+
+            for i, sv in enumerate(datas):
+                j = i % swpw
+                if j == 0:
+                    v = 0
+                v |= sv << (32 * j)
+                if j == (swpw - 1):
+                    self.data.append(v)
+
+            remaining -= rdw
+
+            sys.stdout.write("[{}>{}] {}%\r".format('=' * (20-20*remaining//length),
+                                                   ' ' * (20*remaining//length),
+                                                   100-(100*remaining//length)))
+
         if self.debug:
             print("")
         return self.data

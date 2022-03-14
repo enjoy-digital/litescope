@@ -150,8 +150,9 @@ class _Storage(Module, AutoCSR):
         self.length    = CSRStorage(bits_for(depth))
         self.offset    = CSRStorage(bits_for(depth))
 
-        self.mem_valid = CSRStatus()
-        self.mem_data  = CSRStatus(data_width)
+        read_width = min(32, data_width)
+        self.mem_level = CSRStatus(bits_for(depth))
+        self.mem_data  = CSRStatus(read_width)
 
         # # #
 
@@ -167,8 +168,10 @@ class _Storage(Module, AutoCSR):
         self.specials += MultiReg(self.offset.storage, offset, "scope")
 
         # Status re-synchronization
-        done = Signal()
+        done  = Signal()
+        level = Signal().like(self.mem_level.status)
         self.specials += MultiReg(done, self.done.status)
+        self.specials += MultiReg(level, self.mem_level.status)
 
         # Memory
         mem = stream.SyncFIFO([("data", data_width)], depth, buffered=True)
@@ -177,6 +180,8 @@ class _Storage(Module, AutoCSR):
         cdc = ClockDomainsRenamer(
             {"write": "scope", "read": "sys"})(cdc)
         self.submodules += mem, cdc
+
+        self.comb += level.eq(mem.level)
 
         # Flush
         mem_flush = WaitTimer(depth)
@@ -218,10 +223,21 @@ class _Storage(Module, AutoCSR):
         )
 
         # Memory read
+        if data_width > read_width:
+            pad_bits = - data_width % read_width
+            self.submodules.w_conv = w_conv = stream.Converter(data_width + pad_bits, read_width)
+            self.comb += [
+                self.w_conv.sink.data.eq(Cat(cdc.source.data, Constant(0, pad_bits))),
+                self.w_conv.sink.valid.eq(cdc.source.valid),
+                cdc.source.ready.eq(self.w_conv.sink.ready),
+            ]
+            read_source = w_conv.source
+        else:
+            read_source = cdc.source
+
         self.comb += [
-            self.mem_valid.status.eq(cdc.source.valid),
-            cdc.source.ready.eq(self.mem_data.we | ~self.enable.storage),
-            self.mem_data.status.eq(cdc.source.data)
+            read_source.ready.eq(self.mem_data.we | ~self.enable.storage),
+            self.mem_data.status.eq(read_source.data)
         ]
 
 
