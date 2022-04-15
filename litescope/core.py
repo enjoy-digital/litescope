@@ -301,6 +301,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                     split_signals.append(s.state)
                 else:
                     split_signals.append(s)
+            split_signals = list(dict.fromkeys(split_signals)) # Remove duplicates.
             new_groups[n] = split_signals
         return new_groups
 
