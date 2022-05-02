@@ -21,8 +21,8 @@ import argparse
 
 from migen import *
 
-from litex_boards.platforms import arty
-from litex_boards.targets.arty import *
+from litex_boards.platforms import digilent_arty
+from litex_boards.targets.digilent_arty import *
 
 from litescope import LiteScopeAnalyzer
 
@@ -30,7 +30,7 @@ from litescope import LiteScopeAnalyzer
 
 class LiteScopeSoC(BaseSoC):
     def __init__(self):
-        platform = arty.Platform()
+        platform = digilent_arty.Platform()
 
         # BaseSoC ----------------------------------------------------------------------------------
         BaseSoC.__init__(self,
