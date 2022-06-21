@@ -57,19 +57,14 @@ class VCDDump(Dump):
         c = ""
         for v in self.variables:
             try:
-                if v.values[self.cnt + 1] != v.current_value:
-                    c += "b"
-                    c += dec2bin(v.values[self.cnt + 1], v.width)
-                    c += " "
-                    c += v.code
-                    c += "\n"
+                val = v.values[self.cnt + 1]
+                if val != v.current_value:
+                    v.current_value = val
+                    c += f"b{dec2bin(val, v.width)} {v.code}\n"
             except:
                 pass
         if c != "":
-            r += "#"
-            r += str(self.cnt+1)
-            r += "\n"
-            r += c
+            r += f"#{self.cnt + 1}\n{c}"
         return r
 
     def generate_date(self):
