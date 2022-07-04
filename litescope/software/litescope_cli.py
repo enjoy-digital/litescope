@@ -86,7 +86,7 @@ def run_batch(args):
     signals  = get_signals(args.csv, args.group)
 
     # Configure and run LiteScope analyzer.
-    analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, debug=True)
+    analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
     analyzer.configure_group(args.group)
     analyzer.configure_subsampler(args.subsampling)
     if not add_triggers(args, analyzer, signals):
@@ -112,7 +112,7 @@ def run_gui(args):
 
     def capture_callback():
         basename = os.path.splitext(os.path.basename(args.csv))[0]
-        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, debug=True)
+        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
         analyzer.configure_group(int(dpg.get_value(item="capture_group"), 0))
         analyzer.configure_subsampler(int(dpg.get_value(item="capture_subsampling"), 0))
         trigger_cond = {}
