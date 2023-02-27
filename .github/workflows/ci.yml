@@ -4,11 +4,14 @@ on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       # Checkout Repository
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+
+      - name: Setup CCache
+        uses: hendrikmuhs/ccache-action@v1.2
 
       # Install Tools
       - name: Install Tools
@@ -23,15 +26,12 @@ jobs:
       - name: Install LiteX
         run: |
           wget https://raw.githubusercontent.com/enjoy-digital/litex/master/litex_setup.py
-          python3 litex_setup.py init install --user
+          python3 litex_setup.py --init --install --user
 
       # Install RISC-V GCC
       - name: Install RISC-V GCC
         run: |
-          wget https://raw.githubusercontent.com/enjoy-digital/litex/master/litex_setup.py
-          python3 litex_setup.py gcc
-          sudo mkdir /usr/local/riscv
-          sudo cp -r $PWD/../riscv64-*/* /usr/local/riscv
+          sudo python3 litex_setup.py --gcc=riscv
 
       # Install Project
       - name: Install Project
@@ -40,5 +40,4 @@ jobs:
       # Test
       - name: Run Tests
         run: |
-          export PATH=/usr/local/riscv/bin:$PATH
           python3 setup.py test
