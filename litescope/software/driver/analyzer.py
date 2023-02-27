@@ -173,9 +173,11 @@ class LiteScopeAnalyzerDriver:
 
             remaining -= rdw
 
-            sys.stdout.write("[{}>{}] {}%\r".format('=' * (20-20*remaining//length),
-                                                   ' ' * (20*remaining//length),
-                                                   100-(100*remaining//length)))
+            sys.stdout.write("[{}>{}] {}%\r".format(
+                '=' * (20-20*remaining//length),
+                ' ' * (20*remaining//length),
+                100-(100*remaining//length))
+            )
 
         if self.debug:
             print("")
