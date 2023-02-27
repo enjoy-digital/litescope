@@ -8,8 +8,8 @@
 
 # Use:
 # ./arty.py --build --load
-# lxserver --udp (for LiteScope over UDP)
-# litescope_cli: will trigget an immediate capture!
+# litex_server --udp (for LiteScope over UDP)
+# litescope_cli: will trigger an immediate capture!
 # litescope_cli --help: list the available trigger option.
 # litescope_cli --list: list the signals that can be used as triggers.
 # litescope_cli -v main_count 128: trigger on count value == 128.
