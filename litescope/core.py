@@ -7,9 +7,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from migen import *
-from migen.genlib.misc import WaitTimer
 from migen.genlib.cdc import MultiReg, PulseSynchronizer
 
+from litex.gen.genlib.misc import WaitTimer
 from litex.build.tools import write_to_file
 
 from litex.soc.interconnect.csr import *
