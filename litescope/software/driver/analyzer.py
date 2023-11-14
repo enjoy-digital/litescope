@@ -119,6 +119,9 @@ class LiteScopeAnalyzerDriver:
 
     def configure_subsampler(self, value):
         self.subsampling = value
+        counter_max = 2**self.subsampler_counter_bits
+        if self.subsampling > counter_max:
+            raise ValueError(f"Subsampler counter must be <= {counter_max:,d}")
         self.subsampler_value.write(value-1)
 
     def run(self, offset=0, length=None):
