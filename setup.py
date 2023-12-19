@@ -13,7 +13,7 @@ setup(
     download_url         = "https://github.com/enjoy-digital/litescope",
     test_suite           = "test",
     license              = "BSD",
-    python_requires      = "~=3.6",
+    python_requires      = "~=3.7",
     packages             = find_packages(exclude=("test*", "sim*", "doc*", "examples*")),
     include_package_data = True,
     entry_points={
