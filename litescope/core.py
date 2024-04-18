@@ -93,18 +93,18 @@ class _Trigger(Module, AutoCSR):
         ]
 
 class _SubSampler(Module, AutoCSR):
-    def __init__(self, data_width):
+    def __init__(self, data_width, counter_bits=16):
         self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
 
-        self.value = CSRStorage(16)
+        self.value = CSRStorage(counter_bits)
 
         # # #
 
-        value = Signal(16)
+        value = Signal(counter_bits)
         self.specials += MultiReg(self.value.storage, value, "scope")
 
-        counter = Signal(16)
+        counter = Signal(counter_bits)
         done    = Signal()
         self.sync.scope += \
             If(source.ready,
@@ -240,10 +240,11 @@ class _Storage(Module, AutoCSR):
 
 
 class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, samplerate=1e12, clock_domain="sys", trigger_depth=16, register=False, csr_csv="analyzer.csv"):
-        self.groups     = groups = self.format_groups(groups)
-        self.depth      = depth
-        self.samplerate = int(samplerate)
+    def __init__(self, groups, depth, samplerate=1e12, clock_domain="sys", trigger_depth=16, subsampler_bits=16, register=False, csr_csv="analyzer.csv"):
+        self.groups          = groups = self.format_groups(groups)
+        self.depth           = depth
+        self.samplerate      = int(samplerate)
+        self.subsampler_bits = subsampler_bits
 
         self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
 
@@ -271,7 +272,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
 
         # Frontend
         self.submodules.trigger = _Trigger(data_width, depth=trigger_depth)
-        self.submodules.subsampler = _SubSampler(data_width)
+        self.submodules.subsampler = _SubSampler(data_width, counter_bits=self.subsampler_bits)
 
         # Storage
         self.submodules.storage = _Storage(data_width, depth)
@@ -311,6 +312,7 @@ class LiteScopeAnalyzer(Module, AutoCSR):
         r = format_line("config", "None", "data_width", str(self.data_width))
         r += format_line("config", "None", "depth", str(self.depth))
         r += format_line("config", "None", "samplerate", str(self.samplerate))
+        r += format_line("config", "None", "subsampler_counter_bits", str(self.subsampler_bits))
         for i, signals in self.groups.items():
             for s in signals:
                 r += format_line("signal", str(i), vns.get_name(s), str(len(s)))
