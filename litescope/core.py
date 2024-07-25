@@ -1,7 +1,7 @@
 #
 # This file is part of LiteScope.
 #
-# Copyright (c) 2016-2019 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2016-2024 Florent Kermarrec <florent@enjoy-digital.fr>
 # Copyright (c) 2018 bunnie <bunnie@kosagi.com>
 # Copyright (c) 2016 Tim 'mithro' Ansell <mithro@mithis.com>
 # SPDX-License-Identifier: BSD-2-Clause
@@ -9,16 +9,19 @@
 from migen import *
 from migen.genlib.cdc import MultiReg, PulseSynchronizer
 
+from litex.gen import *
 from litex.gen.genlib.misc import WaitTimer
+
 from litex.build.tools import write_to_file
 
 from litex.soc.interconnect.csr import *
-from litex.soc.cores.gpio import GPIOInOut
+
+from litex.soc.cores.gpio   import GPIOInOut
 from litex.soc.interconnect import stream
 
 # LiteScope IO -------------------------------------------------------------------------------------
 
-class LiteScopeIO(Module, AutoCSR):
+class LiteScopeIO(LiteXModule):
     def __init__(self, data_width):
         self.data_width = data_width
         self.input  = Signal(data_width)
@@ -26,18 +29,19 @@ class LiteScopeIO(Module, AutoCSR):
 
         # # #
 
-        self.submodules.gpio = GPIOInOut(self.input, self.output)
+        self.gpio = GPIOInOut(self.input, self.output)
 
     def get_csrs(self):
         return self.gpio.get_csrs()
 
-# LiteScope Analyzer -------------------------------------------------------------------------------
+# LiteScope Analyzer Constants/Layouts -------------------------------------------------------------
 
 def core_layout(data_width):
     return [("data", data_width), ("hit", 1)]
 
+# LiteScope Analyzer Trigger -----------------------------------------------------------------------
 
-class _Trigger(Module, AutoCSR):
+class _Trigger(LiteXModule):
     def __init__(self, data_width, depth=16):
         self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
@@ -52,17 +56,17 @@ class _Trigger(Module, AutoCSR):
 
         # # #
 
-        # Control re-synchronization
+        # Control re-synchronization.
         enable   = Signal()
         enable_d = Signal()
         self.specials += MultiReg(self.enable.storage, enable, "scope")
         self.sync.scope += enable_d.eq(enable)
 
-        # Status re-synchronization
+        # Status re-synchronization.
         done = Signal()
         self.specials += MultiReg(done, self.done.status)
 
-        # Memory and configuration
+        # Memory and configuration.
         mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth)
         mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
         self.submodules += mem
@@ -73,7 +77,7 @@ class _Trigger(Module, AutoCSR):
             self.mem_full.status.eq(~mem.sink.ready)
         ]
 
-        # Hit and memory read/flush
+        # Hit and memory read/flush.
         hit   = Signal()
         flush = WaitTimer(2*depth)
         flush = ClockDomainsRenamer("scope")(flush)
@@ -84,15 +88,17 @@ class _Trigger(Module, AutoCSR):
             mem.source.ready.eq((enable & hit) | ~flush.done),
         ]
 
-        # Output
+        # Output.
         self.comb += [
             sink.connect(source),
-            # Done when all triggers have been consumed
+            # Done when all triggers have been consumed.
             done.eq(~mem.source.valid),
             source.hit.eq(done)
         ]
 
-class _SubSampler(Module, AutoCSR):
+# LiteScope Analyzer SubSampler --------------------------------------------------------------------
+
+class _SubSampler(LiteXModule):
     def __init__(self, data_width):
         self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
@@ -121,8 +127,9 @@ class _SubSampler(Module, AutoCSR):
             source.valid.eq(sink.valid & done)
         ]
 
+# LiteScope Analyzer Mux ---------------------------------------------------------------------------
 
-class _Mux(Module, AutoCSR):
+class _Mux(LiteXModule):
     def __init__(self, data_width, n):
         self.sinks  = sinks  = [stream.Endpoint(core_layout(data_width)) for i in range(n)]
         self.source = source = stream.Endpoint(core_layout(data_width))
@@ -139,8 +146,9 @@ class _Mux(Module, AutoCSR):
             cases[i] = sinks[i].connect(source)
         self.comb += Case(value, cases)
 
+# LiteScope Analyzer Storage -----------------------------------------------------------------------
 
-class _Storage(Module, AutoCSR):
+class _Storage(LiteXModule):
     def __init__(self, data_width, depth):
         self.sink = sink = stream.Endpoint(core_layout(data_width))
 
@@ -156,7 +164,7 @@ class _Storage(Module, AutoCSR):
 
         # # #
 
-        # Control re-synchronization
+        # Control re-synchronization.
         enable   = Signal()
         enable_d = Signal()
         self.specials += MultiReg(self.enable.storage, enable, "scope")
@@ -167,28 +175,27 @@ class _Storage(Module, AutoCSR):
         self.specials += MultiReg(self.length.storage, length, "scope")
         self.specials += MultiReg(self.offset.storage, offset, "scope")
 
-        # Status re-synchronization
+        # Status re-synchronization.
         done  = Signal()
         level = Signal().like(self.mem_level.status)
         self.specials += MultiReg(done, self.done.status)
         self.specials += MultiReg(level, self.mem_level.status)
 
-        # Memory
+        # Memory.
         mem = stream.SyncFIFO([("data", data_width)], depth, buffered=True)
         mem = ClockDomainsRenamer("scope")(mem)
         cdc = stream.AsyncFIFO([("data", data_width)], 4)
-        cdc = ClockDomainsRenamer(
-            {"write": "scope", "read": "sys"})(cdc)
+        cdc = ClockDomainsRenamer({"write": "scope", "read": "sys"})(cdc)
         self.submodules += mem, cdc
 
         self.comb += level.eq(mem.level)
 
-        # Flush
+        # Flush.
         mem_flush = WaitTimer(depth)
         mem_flush = ClockDomainsRenamer("scope")(mem_flush)
         self.submodules += mem_flush
 
-        # FSM
+        # FSM.
         fsm = FSM(reset_state="IDLE")
         fsm = ClockDomainsRenamer("scope")(fsm)
         self.submodules += fsm
@@ -222,7 +229,7 @@ class _Storage(Module, AutoCSR):
             )
         )
 
-        # Memory read
+        # Memory read.
         read_source = stream.Endpoint([("data", data_width)])
         if data_width > read_width:
             pad_bits = - data_width % read_width
@@ -238,9 +245,16 @@ class _Storage(Module, AutoCSR):
             self.mem_data.status.eq(read_source.data)
         ]
 
+# LiteScope Analyzer -------------------------------------------------------------------------------
 
-class LiteScopeAnalyzer(Module, AutoCSR):
-    def __init__(self, groups, depth, samplerate=1e12, clock_domain="sys", trigger_depth=16, register=False, csr_csv="analyzer.csv"):
+class LiteScopeAnalyzer(LiteXModule):
+    def __init__(self, groups, depth,
+        samplerate    = 1e12,
+        clock_domain  = "sys",
+        trigger_depth = 16,
+        register      = False,
+        csr_csv       = "analyzer.csv",
+    ):
         self.groups     = groups = self.format_groups(groups)
         self.depth      = depth
         self.samplerate = int(samplerate)
@@ -251,12 +265,13 @@ class LiteScopeAnalyzer(Module, AutoCSR):
 
         # # #
 
-        # Create scope clock domain
-        self.clock_domains.cd_scope = ClockDomain()
+        # Create scope clock domain.
+        self.cd_scope = ClockDomain()
         self.comb += self.cd_scope.clk.eq(ClockSignal(clock_domain))
 
-        # Mux
-        self.submodules.mux = _Mux(data_width, len(groups))
+        # Mux.
+        # ----
+        self.mux = _Mux(data_width, len(groups))
         sd = getattr(self.sync, clock_domain)
         for i, signals in groups.items():
             s = Cat(signals)
@@ -269,19 +284,23 @@ class LiteScopeAnalyzer(Module, AutoCSR):
                 self.mux.sinks[i].data.eq(s)
             ]
 
-        # Frontend
-        self.submodules.trigger = _Trigger(data_width, depth=trigger_depth)
-        self.submodules.subsampler = _SubSampler(data_width)
+        # Frontend.
+        # ---------
+        self.trigger    = _Trigger(data_width, depth=trigger_depth)
+        self.subsampler = _SubSampler(data_width)
 
-        # Storage
-        self.submodules.storage = _Storage(data_width, depth)
+        # Storage.
+        # --------
+        self.storage = _Storage(data_width, depth)
 
-        # Pipeline
-        self.submodules.pipeline = stream.Pipeline(
-            self.mux.source,
+        # Pipeline: Mux -> Trigger -> Subsampler -> Storage.
+        # --------------------------------------------------
+        self.pipeline = stream.Pipeline(
+            self.mux,
             self.trigger,
             self.subsampler,
-            self.storage.sink)
+            self.storage,
+        )
 
     def format_groups(self, groups):
         if not isinstance(groups, dict):
