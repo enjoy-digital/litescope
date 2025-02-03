@@ -105,7 +105,7 @@ def run_batch(args):
 def run_gui(args):
     import dearpygui.dearpygui as dpg
 
-    bus = RemoteClient(host=args.host, csr_csv=args.csr_csv)
+    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
     bus.open()
 
     triggers = get_signals(args.csv, args.group)
@@ -167,6 +167,7 @@ def parse_args():
         metavar=("TRIGGER", "VALUE"))
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices.")
     parser.add_argument("--host",                default="localhost",      help="Host ip address")
+    parser.add_argument("--port",                default="1234",           help="Host bind port.")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file.")
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
     parser.add_argument("--group",               default=0, type=int,      help="Capture Group.")
