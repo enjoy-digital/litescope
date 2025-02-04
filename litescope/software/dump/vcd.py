@@ -89,7 +89,7 @@ class VCDDump(Dump):
         return r
 
     def generate_vars(self):
-        r = "$scope dumped_signals $end\n"
+        r = "$scope module top $end\n"
         for v in self.variables:
             r += "$var wire "
             r += str(v.width)
@@ -98,7 +98,7 @@ class VCDDump(Dump):
             r += " "
             r += v.name
             r += " $end\n"
-        r += "$unscope "
+        r += "$upscope "
         r += " $end\n"
         r += "$enddefinitions "
         r += " $end\n"
