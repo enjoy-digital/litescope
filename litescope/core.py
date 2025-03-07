@@ -275,6 +275,8 @@ class LiteScopeAnalyzer(LiteXModule):
         sd = getattr(self.sync, clock_domain)
         for i, signals in groups.items():
             s = Cat(signals)
+            if len(s) < data_width:
+                s = Cat(s, Constant(0, data_width - len(s)))
             if register:
                 s_d = Signal(len(s))
                 sd += s_d.eq(s)
