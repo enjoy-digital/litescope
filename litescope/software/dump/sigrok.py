@@ -109,7 +109,7 @@ unitsize={}
         probes = OrderedDict()
         f = open("metadata", "r")
         for l in f:
-            m = re.search("probe([0-9]+) = (\w+)", l, re.I)
+            m = re.search(r"probe([0-9]+) = (\w+)", l, re.I)
             if m is not None:
                 index = int(m.group(1))
                 name = m.group(2)
