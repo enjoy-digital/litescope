@@ -7,8 +7,9 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
-import sys
 import re
+import sys
+import time
 
 from migen import *
 
@@ -145,9 +146,10 @@ class LiteScopeAnalyzerDriver:
     def done(self):
         return self.storage_done.read()
 
-    def wait_done(self):
+    def wait_done(self, delay=0.2):
         while not self.done():
-            pass
+            if delay:
+                time.sleep(delay)
 
     def upload(self):
         if self.debug:
