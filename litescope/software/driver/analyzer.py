@@ -20,6 +20,31 @@ import csv
 
 
 class LiteScopeAnalyzerDriver:
+    # Logging / UI helpers -------------------------------------------------------------------------
+    def _log(self, msg):
+        if self.debug:
+            print(f"{self.name}: {msg}")
+
+    def _progress(self, cur, total, width=20):
+        # Only show progress when debugging (keeps normal usage quiet and preserves scripts' stdout).
+        if not self.debug:
+            return
+        if total <= 0:
+            return
+        if cur < 0:
+            cur = 0
+        if cur > total:
+            cur = total
+        done = (width * cur) // total
+        sys.stdout.write(f"\r{self.name}: [{'='*done}{' '*(width-done)}] {(100*cur)//total}%")
+        sys.stdout.flush()
+
+    def _progress_end(self):
+        if self.debug:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    # Driver --------------------------------------------------------------------------------------
     def __init__(self, regs, name, config_csv=None, debug=False):
         self.regs = regs
         self.name = name
@@ -130,7 +155,7 @@ class LiteScopeAnalyzerDriver:
         self.offset = offset
         self.length = length
         if self.debug:
-            print("[running]...")
+            self._log(f"run (offset={offset}, length={length})")
         self.storage_offset.write(offset)
         self.storage_length.write(length)
         self.storage_enable.write(1)
@@ -147,18 +172,23 @@ class LiteScopeAnalyzerDriver:
         return self.storage_done.read()
 
     def wait_done(self, delay=0.2):
+        if self.debug:
+            self._log(f"wait_done (delay={delay}s)")
         while not self.done():
             if delay:
                 time.sleep(delay)
 
     def upload(self):
-        if self.debug:
-            print("[uploading]...")
-
         length = self.storage_mem_level.read()
+        if self.debug:
+            self._log(f"upload (words={length})")
+
         remaining = length
         swpw = (self.data_width + 31) // 32 # Sub-Words per word
         mwbl = 192 // swpw                  # Max Burst len (in # of words)
+
+        cur = 0
+        self._progress(0, length)
 
         while remaining > 0:
             rdw  = min(remaining, mwbl)
@@ -174,22 +204,18 @@ class LiteScopeAnalyzerDriver:
                     self.data.append(v)
 
             remaining -= rdw
+            cur += rdw
+            self._progress(cur, length)
 
-            sys.stdout.write("[{}>{}] {}%\r".format(
-                '=' * (20-20*remaining//length),
-                ' ' * (20*remaining//length),
-                100-(100*remaining//length))
-            )
-
-        if self.debug:
-            print("")
+        self._progress_end()
         return self.data
 
     def save(self, filename, samplerate=None, flatten=False):
         if samplerate is None:
             samplerate = self.samplerate / self.subsampling
         if self.debug:
-            print("[writing to " + filename + "]...")
+            self._log(f"write {filename}")
+
         name, ext = os.path.splitext(filename)
         if ext == ".vcd":
             dump = VCDDump(samplerate=samplerate)
