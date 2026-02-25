@@ -30,7 +30,7 @@ _si_prefix2exp = {
 }
 
 def _timescale_str2num(timescale):
-    match = re.fullmatch("(\d+)(\w{0,1})s", timescale)
+    match = re.fullmatch(r"(\d+)(\w{0,1})s", timescale)
     num = int(match.group(1))
     si_prefix = match.group(2)
     exp = _si_prefix2exp[si_prefix]
