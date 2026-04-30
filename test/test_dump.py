@@ -6,6 +6,7 @@
 
 import unittest
 import os
+import random
 from math import cos, sin
 
 from litescope.software.dump import *
@@ -20,6 +21,34 @@ for i in range(4):
 pi = 3.1415
 dump.add(DumpVariable("sin", 8, [128+128*sin(j/(2*pi*16)) for j in range(1024)]))
 dump.add(DumpVariable("cos", 8, [128+128*cos(j/(2*pi*16)) for j in range(1024)]))
+
+
+def encode_rle(samples, data_width, storage_width, max_count):
+    data_mask = 2**data_width - 1
+    marker    = 1 << (storage_width - 1)
+    encoded   = DumpData(storage_width)
+    if not samples:
+        return encoded
+
+    last = samples[0] & data_mask
+    encoded.append(last)
+    repeats = 0
+    for sample in samples[1:]:
+        sample &= data_mask
+        if sample == last:
+            repeats += 1
+            continue
+        while repeats:
+            count = min(repeats, max_count)
+            encoded.append(marker | count)
+            repeats -= count
+        encoded.append(sample)
+        last = sample
+    while repeats:
+        count = min(repeats, max_count)
+        encoded.append(marker | count)
+        repeats -= count
+    return encoded
 
 
 class TestDump(unittest.TestCase):
@@ -99,6 +128,28 @@ class TestDump(unittest.TestCase):
 
         self.assertEqual(decoded.width, 4)
         self.assertEqual(list(decoded), [9]*20 + [2])
+
+    def test_dumpdata_decode_rle_randomized_streams(self):
+        rng = random.Random(42)
+        for i in range(64):
+            data_width    = rng.randint(1, 12)
+            count_width   = rng.randint(1, 8)
+            storage_width = max(data_width, count_width) + 1
+            max_count     = rng.randint(1, 2**count_width - 1)
+
+            samples = []
+            for j in range(rng.randint(0, 40)):
+                value = rng.randrange(2**data_width)
+                run   = rng.randint(1, 3*max_count + 2)
+                samples.extend([value]*run)
+
+            encoded = encode_rle(samples, data_width, storage_width, max_count)
+            decoded = encoded.decode_rle(data_width=data_width)
+
+            self.assertEqual(decoded.width, data_width)
+            self.assertEqual(list(decoded), samples)
+            if samples:
+                self.assertLessEqual(len(encoded), len(samples))
 
     def test_add_from_layout(self):
         data = DumpData(8)
