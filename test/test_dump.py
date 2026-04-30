@@ -9,6 +9,7 @@ import os
 from math import cos, sin
 
 from litescope.software.dump import *
+from litescope.software.dump.common import dec2bin
 
 #TODO:
 # - find a way to check if files are generated correctly
@@ -22,6 +23,45 @@ dump.add(DumpVariable("cos", 8, [128+128*cos(j/(2*pi*16)) for j in range(1024)])
 
 
 class TestDump(unittest.TestCase):
+    def test_dec2bin(self):
+        self.assertEqual(dec2bin(0, 4), "0000")
+        self.assertEqual(dec2bin(5, 4), "0101")
+        self.assertEqual(dec2bin("x", 4), "xxxx")
+
+    def test_dumpdata_index_and_slice(self):
+        data = DumpData(8)
+        data.extend([0b10101100, 0b01010011])
+
+        self.assertEqual(data[0], [0, 1])
+        self.assertEqual(data[2:6], [0b1011, 0b0100])
+        self.assertEqual(data[:4], [0b1100, 0b0011])
+        self.assertEqual(data[4:], [0b1010, 0b0101])
+        with self.assertRaises(KeyError):
+            data[0:4:2]
+
+    def test_add_from_layout(self):
+        data = DumpData(8)
+        data.extend([0b10110001, 0b01001110])
+
+        dump = Dump()
+        dump.add_from_layout([("low", 4), ("high", 4)], data)
+
+        self.assertEqual([(v.name, v.width, v.values) for v in dump.variables], [
+            ("low",  4, [0x1, 0x1, 0xe, 0xe]),
+            ("high", 4, [0xb, 0xb, 0x4, 0x4]),
+        ])
+
+    def test_add_from_layout_flatten(self):
+        data = DumpData(4)
+        data.extend([0b1010, 0b0101])
+
+        dump = Dump()
+        dump.add_from_layout_flatten([("bus", 4)], data)
+
+        self.assertEqual([(v.name, v.width, v.values) for v in dump.variables], [
+            ("bus", 1, [0, 1, 0, 1, 1, 0, 1, 0]),
+        ])
+
     def test_csv(self):
         filename = "dump.csv"
         CSVDump(dump).write(filename)
