@@ -106,6 +106,48 @@ class TestAnalyzer(unittest.TestCase):
         run_simulation(dut, generators, clocks)
         self.assertEqual(dut.data, [132 + 3*i for i in range(len(dut.data))])
 
+    def test_analyzer_raw_msb_data_without_rle(self):
+        def generator(dut):
+            yield from dut.analyzer.trigger.mem_value.write(0)
+            yield from dut.analyzer.trigger.mem_mask.write(0)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(8)
+            yield from dut.analyzer.storage.offset.write(0)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            yield
+
+            seen_busy = False
+            for i in range(128):
+                done = (yield from dut.analyzer.storage.done.read())
+                if not done:
+                    seen_busy = True
+                elif seen_busy:
+                    break
+                yield
+            else:
+                raise TimeoutError("Raw capture did not complete")
+
+            dut.data = (yield from read_capture_words(dut.analyzer, 8))
+
+        class DUT(Module):
+            def __init__(self):
+                counter = Signal(8, reset=0x80)
+                self.sync += counter.eq(counter + 1)
+                self.submodules.analyzer = LiteScopeAnalyzer(counter, 16, csr_csv=None)
+
+        dut = DUT()
+        generators = {"sys" : [generator(dut)]}
+        clocks     = {"sys": 10, "scope": 10}
+        run_simulation(dut, generators, clocks)
+        self.assertEqual(dut.analyzer.data_width, 8)
+        self.assertEqual(dut.analyzer.storage_width, 8)
+        self.assertFalse(hasattr(dut.analyzer, "rle"))
+        self.assertTrue(all(sample & 0x80 for sample in dut.data))
+        self.assertEqual(dut.data, list(range(dut.data[0], dut.data[0] + len(dut.data))))
+
     def test_analyzer_rle_constant_signal(self):
         def generator(dut):
             yield from dut.analyzer.trigger.mem_value.write(0)

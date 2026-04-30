@@ -226,6 +226,15 @@ class TestAnalyzerDriver(unittest.TestCase):
             (0x1234, 6, "fixed"),
         ])
 
+    def test_upload_empty_raw_capture(self):
+        driver, regs = self.make_driver(data_width=16, mem_level=0, mem_data=[0x12345678])
+
+        data = driver.upload()
+
+        self.assertEqual(data.width, 16)
+        self.assertEqual(list(data), [])
+        self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [])
+
     def test_upload_legacy_config_without_rle_metadata_is_raw(self):
         mem_data = [
             0x00000082,
@@ -245,6 +254,28 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
             (0x1234, 2, "fixed"),
         ])
+
+    def test_upload_current_non_rle_config_keeps_raw_marker_values(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+        config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
+        write_config(config_csv,
+            data_width    = 8,
+            storage_width = 8,
+            with_rle      = 0,
+            rle_length    = 256)
+        regs = make_regs(mem_level=3, mem_data=[0x80, 0xff, 0x01])
+
+        driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
+        data = driver.upload()
+
+        self.assertEqual(driver.storage_width, 8)
+        self.assertEqual(driver.with_rle, 0)
+        self.assertEqual(driver.rle_length, 256)
+        self.assertEqual(data.width, 8)
+        self.assertEqual(list(data), [0x80, 0xff, 0x01])
+        driver.configure_rle(False)
+        with self.assertRaises(ValueError):
+            driver.configure_rle(True)
 
     def test_upload_decodes_rle(self):
         mem_data = [
