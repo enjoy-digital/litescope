@@ -6,13 +6,24 @@
 
 import unittest
 import os
+import subprocess
+import sys
+import tempfile
 
 from litescope.software.dump import *
 
 root_dir    = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..")
+examples_dir = os.path.join(root_dir, "examples")
+arty_py = os.path.join(examples_dir, "arty.py")
 
 class TestExamples(unittest.TestCase):
     def test_arty(self):
-        os.system(f"rm -rf {root_dir}/build")
-        os.system(f"cd {root_dir}/examples && python3 arty.py")
-        self.assertEqual(os.path.isfile(f"{root_dir}/examples/build/digilent_arty/gateware/digilent_arty.v"), True)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = os.path.join(tmpdir, "digilent_arty")
+            subprocess.check_call([
+                sys.executable, arty_py,
+                "--output-dir", output_dir,
+            ], cwd=tmpdir)
+            self.assertEqual(os.path.isfile(
+                os.path.join(output_dir, "gateware", "digilent_arty.v")
+            ), True)

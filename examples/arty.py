@@ -50,7 +50,10 @@ class LiteScopeSoC(BaseSoC):
             clock_domain = "sys",
             samplerate   = self.sys_clk_freq,
             csr_csv      = "analyzer.csv")
-        self.add_csr("analyzer")
+        if hasattr(self, "add_csr"):
+            self.add_csr("analyzer")
+        else:
+            self.csr.add("analyzer")
 
 # Build --------------------------------------------------------------------------------------------
 
@@ -58,10 +61,11 @@ def main():
     parser = argparse.ArgumentParser(description="LiteScope example on Arty A7")
     parser.add_argument("--build", action="store_true", help="Build bitstream")
     parser.add_argument("--load",  action="store_true", help="Load bitstream")
+    parser.add_argument("--output-dir", default=None, help="Builder output directory")
     args = parser.parse_args()
 
     soc     = LiteScopeSoC()
-    builder = Builder(soc, csr_csv="csr.csv")
+    builder = Builder(soc, output_dir=args.output_dir, csr_csv="csr.csv")
     builder.build(run=args.build)
 
     if args.load:
