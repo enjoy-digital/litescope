@@ -80,7 +80,12 @@ Compression depends on signal activity:
 
 With RLE enabled, `depth` and capture `length` describe encoded storage words,
 not final decoded sample count. A compressed capture can therefore decode to
-more logical samples than the configured storage length.
+more logical samples than the configured storage length. To cap the decoded
+logical samples returned by the driver:
+
+```python
+data = analyzer.upload(max_samples=1024)
+```
 
 [> Proven
 ---------

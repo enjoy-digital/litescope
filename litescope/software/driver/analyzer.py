@@ -44,6 +44,15 @@ class LiteScopeAnalyzerDriver:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
+    def _limit_samples(self, data, max_samples):
+        if max_samples is None:
+            return data
+        if max_samples < 0:
+            raise ValueError("max_samples must be >= 0")
+        limited = DumpData(data.width)
+        limited.extend(list(data)[:max_samples])
+        return limited
+
     # Driver --------------------------------------------------------------------------------------
     def __init__(self, regs, name, config_csv=None, debug=False):
         self.regs = regs
@@ -196,7 +205,7 @@ class LiteScopeAnalyzerDriver:
             if delay:
                 time.sleep(delay)
 
-    def upload(self):
+    def upload(self, max_samples=None):
         length = self.storage_mem_level.read()
         if self.debug:
             self._log(f"upload (words={length})")
@@ -236,6 +245,7 @@ class LiteScopeAnalyzerDriver:
                 self.data.extend([d & data_mask for d in storage_data])
         else:
             self.data = storage_data
+        self.data = self._limit_samples(self.data, max_samples)
         return self.data
 
     def save(self, filename, samplerate=None, flatten=False):

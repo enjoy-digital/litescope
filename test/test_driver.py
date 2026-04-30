@@ -235,6 +235,17 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(list(data), [])
         self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [])
 
+    def test_upload_limits_raw_samples(self):
+        driver, regs = self.make_driver(
+            data_width = 8,
+            mem_level  = 4,
+            mem_data   = [0x01, 0x02, 0x03, 0x04])
+
+        data = driver.upload(max_samples=2)
+
+        self.assertEqual(data.width, 8)
+        self.assertEqual(list(data), [0x01, 0x02])
+
     def test_upload_legacy_config_without_rle_metadata_is_raw(self):
         mem_data = [
             0x00000082,
@@ -299,6 +310,50 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
             (0x1234, 4, "fixed"),
         ])
+
+    def test_upload_limits_decoded_rle_samples(self):
+        mem_data = [
+            0x00000003,
+            0x00000082,
+            0x0000000a,
+            0x00000081,
+        ]
+        driver, regs = self.make_driver(
+            data_width    = 4,
+            storage_width = 8,
+            with_rle      = True,
+            mem_level     = 4,
+            mem_data      = mem_data)
+
+        driver.configure_rle(True)
+        data = driver.upload(max_samples=4)
+
+        self.assertEqual(data.width, 4)
+        self.assertEqual(list(data), [3, 3, 3, 10])
+
+    def test_upload_limits_decoded_rle_samples_to_zero(self):
+        mem_data = [
+            0x00000003,
+            0x00000082,
+        ]
+        driver, regs = self.make_driver(
+            data_width    = 4,
+            storage_width = 8,
+            with_rle      = True,
+            mem_level     = 2,
+            mem_data      = mem_data)
+
+        driver.configure_rle(True)
+        data = driver.upload(max_samples=0)
+
+        self.assertEqual(data.width, 4)
+        self.assertEqual(list(data), [])
+
+    def test_upload_rejects_negative_sample_limit(self):
+        driver, regs = self.make_driver(data_width=8, mem_level=0)
+
+        with self.assertRaises(ValueError):
+            driver.upload(max_samples=-1)
 
     def test_upload_strips_rle_storage_padding_when_disabled(self):
         mem_data = [
