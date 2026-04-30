@@ -36,17 +36,24 @@ class FakeRegs:
         self.d = {f"{name}_{k}": v for k, v in regs.items()}
 
 
-def write_config(filename, data_width=8, depth=16, samplerate=100000000):
+def write_config(filename, data_width=8, depth=16, samplerate=100000000,
+                 storage_width=None, with_rle=None, rle_length=None):
     with open(filename, "w") as f:
         f.write(f"config,None,data_width,{data_width}\n")
+        if storage_width is not None:
+            f.write(f"config,None,storage_width,{storage_width}\n")
         f.write(f"config,None,depth,{depth}\n")
         f.write(f"config,None,samplerate,{samplerate}\n")
+        if with_rle is not None:
+            f.write(f"config,None,with_rle,{int(with_rle)}\n")
+        if rle_length is not None:
+            f.write(f"config,None,rle_length,{rle_length}\n")
         f.write("signal,0,flag,1\n")
         f.write("signal,0,state,3\n")
         f.write(f"signal,1,wide,{data_width}\n")
 
 
-def make_regs(name="analyzer", mem_level=0, mem_data=None):
+def make_regs(name="analyzer", mem_level=0, mem_data=None, with_rle=False):
     regs = {
         "mux_value":             FakeReg(),
         "trigger_mem_full":      FakeReg(),
@@ -62,15 +69,23 @@ def make_regs(name="analyzer", mem_level=0, mem_data=None):
         "storage_mem_level":     FakeReg(mem_level),
         "storage_mem_data":      FakeReg(data=mem_data, addr=0x1234),
     }
+    if with_rle:
+        regs["rle_enable"] = FakeReg()
     return FakeRegs(name, regs)
 
 
 class TestAnalyzerDriver(unittest.TestCase):
-    def make_driver(self, data_width=8, depth=16, mem_level=0, mem_data=None):
+    def make_driver(self, data_width=8, depth=16, mem_level=0, mem_data=None,
+                    storage_width=None, with_rle=False, rle_length=256):
         self.tmpdir = tempfile.TemporaryDirectory()
         config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
-        write_config(config_csv, data_width=data_width, depth=depth)
-        regs = make_regs(mem_level=mem_level, mem_data=mem_data)
+        write_config(config_csv,
+            data_width    = data_width,
+            depth         = depth,
+            storage_width = storage_width,
+            with_rle      = with_rle if with_rle else None,
+            rle_length    = rle_length if with_rle else None)
+        regs = make_regs(mem_level=mem_level, mem_data=mem_data, with_rle=with_rle)
         driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
         return driver, regs
 
@@ -86,8 +101,10 @@ class TestAnalyzerDriver(unittest.TestCase):
         driver, regs = self.make_driver()
 
         self.assertEqual(driver.data_width, 8)
+        self.assertEqual(driver.storage_width, 8)
         self.assertEqual(driver.depth, 16)
         self.assertEqual(driver.samplerate, 100000000)
+        self.assertEqual(driver.with_rle, 0)
         self.assertEqual(driver.layouts, {
             0: [("flag", 1), ("state", 3)],
             1: [("wide", 8)],
@@ -100,6 +117,24 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(driver.wide_m,  0xff)
         self.assertEqual(regs.d["analyzer_trigger_enable"].writes, [0])
         self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
+
+    def test_configure_rle(self):
+        driver, regs = self.make_driver(data_width=4, storage_width=5, with_rle=True)
+        self.clear_writes(regs)
+
+        driver.configure_rle(True)
+        driver.configure_rle(False)
+
+        self.assertEqual(driver.storage_width, 5)
+        self.assertEqual(driver.with_rle, 1)
+        self.assertFalse(driver.rle_enabled)
+        self.assertEqual(regs.d["analyzer_rle_enable"].writes, [1, 0])
+
+    def test_configure_rle_rejects_unavailable_analyzer(self):
+        driver, regs = self.make_driver()
+        with self.assertRaises(ValueError):
+            driver.configure_rle(True)
+        driver.configure_rle(False)
 
     def test_conditional_trigger_parsing(self):
         driver, regs = self.make_driver()
@@ -177,6 +212,67 @@ class TestAnalyzerDriver(unittest.TestCase):
         ])
         self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
             (0x1234, 6, "fixed"),
+        ])
+
+    def test_upload_decodes_rle(self):
+        mem_data = [
+            0x00000003,
+            0x00000082,
+            0x0000000a,
+            0x00000081,
+        ]
+        driver, regs = self.make_driver(
+            data_width    = 4,
+            storage_width = 8,
+            with_rle      = True,
+            mem_level     = 4,
+            mem_data      = mem_data)
+
+        driver.configure_rle(True)
+        data = driver.upload()
+
+        self.assertEqual(data.width, 4)
+        self.assertEqual(list(data), [3, 3, 3, 10, 10])
+        self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
+            (0x1234, 4, "fixed"),
+        ])
+
+    def test_upload_strips_rle_storage_padding_when_disabled(self):
+        mem_data = [
+            0x00000023,
+            0x0000000a,
+        ]
+        driver, regs = self.make_driver(
+            data_width    = 4,
+            storage_width = 8,
+            with_rle      = True,
+            mem_level     = 2,
+            mem_data      = mem_data)
+
+        data = driver.upload()
+
+        self.assertEqual(data.width, 4)
+        self.assertEqual(list(data), [3, 10])
+
+    def test_upload_decodes_wide_rle_storage_words(self):
+        mem_data = [
+            0x11111111, 0x00000000,
+            0x00000002, 0x00000001,
+        ]
+        driver, regs = self.make_driver(
+            data_width    = 32,
+            storage_width = 33,
+            with_rle      = True,
+            mem_level     = 2,
+            mem_data      = mem_data)
+
+        driver.configure_rle(True)
+        data = driver.upload()
+
+        self.assertEqual(data.width, 32)
+        self.assertEqual(list(data), [0x11111111, 0x11111111, 0x11111111])
+        self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
+            (0x1234, 4, "fixed"),
         ])
 
 

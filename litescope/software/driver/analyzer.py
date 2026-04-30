@@ -56,6 +56,7 @@ class LiteScopeAnalyzerDriver:
         self.get_layouts()
         self.build()
         self.group = 0
+        self.rle_enabled = False
         self.data = DumpData(self.data_width)
 
         self.offset = 0
@@ -64,6 +65,8 @@ class LiteScopeAnalyzerDriver:
         # Disable trigger and storage
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
+        if hasattr(self, "rle_enable"):
+            self.rle_enable.write(0)
 
     def get_config(self):
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
@@ -71,6 +74,9 @@ class LiteScopeAnalyzerDriver:
             t, g, n, v = item
             if t == "config":
                 setattr(self, n, int(v))
+        self.storage_width = getattr(self, "storage_width", self.data_width)
+        self.with_rle      = getattr(self, "with_rle", 0)
+        self.rle_length    = getattr(self, "rle_length", 0)
 
     def get_layouts(self):
         self.layouts = {}
@@ -147,6 +153,15 @@ class LiteScopeAnalyzerDriver:
         self.subsampling = value
         self.subsampler_value.write(value-1)
 
+    def configure_rle(self, enable=True):
+        if not self.with_rle or not hasattr(self, "rle_enable"):
+            if enable:
+                raise ValueError("RLE is not available on this analyzer")
+            self.rle_enabled = False
+            return
+        self.rle_enabled = bool(enable)
+        self.rle_enable.write(int(enable))
+
     def run(self, offset=0, length=None):
         if length is None:
             length = self.depth
@@ -165,8 +180,11 @@ class LiteScopeAnalyzerDriver:
         self.data = DumpData(self.data_width)
         self.offset = 0
         self.length = None
+        self.rle_enabled = False
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
+        if hasattr(self, "rle_enable"):
+            self.rle_enable.write(0)
 
     def done(self):
         return self.storage_done.read()
@@ -184,8 +202,9 @@ class LiteScopeAnalyzerDriver:
             self._log(f"upload (words={length})")
 
         remaining = length
-        swpw = (self.data_width + 31) // 32 # Sub-Words per word
-        mwbl = 192 // swpw                  # Max Burst len (in # of words)
+        swpw = (self.storage_width + 31) // 32 # Sub-Words per word
+        mwbl = 192 // swpw                     # Max Burst len (in # of words)
+        storage_data = DumpData(self.storage_width)
 
         cur = 0
         self._progress(0, length)
@@ -201,13 +220,22 @@ class LiteScopeAnalyzerDriver:
                     v = 0
                 v |= sv << (32 * j)
                 if j == (swpw - 1):
-                    self.data.append(v)
+                    storage_data.append(v)
 
             remaining -= rdw
             cur += rdw
             self._progress(cur, length)
 
         self._progress_end()
+        if self.with_rle:
+            if self.rle_enabled:
+                self.data = storage_data.decode_rle(data_width=self.data_width)
+            else:
+                data_mask = 2**self.data_width - 1
+                self.data = DumpData(self.data_width)
+                self.data.extend([d & data_mask for d in storage_data])
+        else:
+            self.data = storage_data
         return self.data
 
     def save(self, filename, samplerate=None, flatten=False):

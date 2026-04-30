@@ -89,6 +89,7 @@ def run_batch(args):
     analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
     analyzer.configure_group(args.group)
     analyzer.configure_subsampler(args.subsampling)
+    analyzer.configure_rle(args.rle)
     if not add_triggers(args, analyzer, signals):
         print("No trigger, immediate capture.")
     analyzer.run(
@@ -115,6 +116,7 @@ def run_gui(args):
         analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
         analyzer.configure_group(int(dpg.get_value(item="capture_group"), 0))
         analyzer.configure_subsampler(int(dpg.get_value(item="capture_subsampling"), 0))
+        analyzer.configure_rle(dpg.get_value(item="capture_rle"))
         trigger_cond = {}
         for trigger in triggers:
             trigger_cond[trigger] = dpg.get_value(trigger)
@@ -141,6 +143,7 @@ def run_gui(args):
         dpg.add_input_text(indent=8, label="Length",      tag="capture_length",      default_value="128") # FIXME
         dpg.add_input_text(indent=8, label="Group",       tag="capture_group",       default_value="0")   # FIXME
         dpg.add_input_text(indent=8, label="Subsampling", tag="capture_subsampling", default_value="1")   # FIXME
+        dpg.add_checkbox(  indent=8, label="RLE",         tag="capture_rle",         default_value=args.rle)
         dpg.add_input_text(indent=8, label="Dump",        tag="capture_dump",        default_value=args.dump)
         dpg.add_text("Control/Status")
         with dpg.group(horizontal=True):
@@ -172,6 +175,7 @@ def parse_args():
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
     parser.add_argument("--group",               default=0, type=int,      help="Capture Group.")
     parser.add_argument("--subsampling",         default=1, type=int,      help="Capture Subsampling.")
+    parser.add_argument("--rle",                 action="store_true",      help="Enable analyzer run-length encoding.")
     parser.add_argument("--offset",              default="32",             help="Capture Offset.")
     parser.add_argument("--length",              default=None,             help="Capture Length.")
     parser.add_argument("--dump",                default="dump.vcd",       help="Capture Filename.")
