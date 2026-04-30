@@ -259,10 +259,10 @@ class TestLiteScopeSim(unittest.TestCase):
                     wait_analyzer_done(analyzer_rle, message="LiteScope RLE capture did not complete")
 
                     encoded_words = analyzer_rle.storage_mem_level.read()
-                    rle_data = analyzer_rle.upload()
+                    rle_data = analyzer_rle.upload(max_samples=10)
                     rle_samples = list(rle_data)
                     self.assertGreater(encoded_words, 0)
-                    self.assertGreater(len(rle_samples), encoded_words)
+                    self.assertEqual(len(rle_samples), 10)
                     self.assertEqual(rle_data.width, 4)
                     self.assertTrue(all(sample == 5 for sample in rle_samples))
                 except Exception:
