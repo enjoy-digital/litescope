@@ -16,7 +16,9 @@ jobs:
       # Install Tools
       - name: Install Tools
         run: |
-          sudo apt-get install wget build-essential ninja-build
+          sudo apt-get update
+          sudo apt-get install -y wget build-essential ninja-build verilator
+          sudo apt-get install -y libevent-dev libjson-c-dev zlib1g-dev flex bison libfl-dev libfl2
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v4
