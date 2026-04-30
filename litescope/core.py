@@ -138,6 +138,7 @@ class _RLE(LiteXModule):
 
         self.enable = CSRStorage()
         self.external_enable = Signal(reset=1)
+        self.flush = Signal()
 
         # # #
 
@@ -192,6 +193,11 @@ class _RLE(LiteXModule):
             If(~active_enable,
                 NextValue(count, 0),
                 NextState("BYPASS")
+            ).Elif(self.flush & (count != 0),
+                emit_rle(),
+                If(source.ready,
+                    NextValue(count, 0)
+                )
             ).Elif(count == max_count,
                 emit_rle(),
                 If(source.ready,
@@ -254,6 +260,7 @@ class _Storage(LiteXModule):
     def __init__(self, data_width, depth):
         self.sink = sink = stream.Endpoint(core_layout(data_width))
         self.post_hit = Signal()
+        self.flush = Signal()
 
         self.enable    = CSRStorage()
         self.done      = CSRStatus()
@@ -327,7 +334,10 @@ class _Storage(LiteXModule):
         )
         fsm.act("RUN",
             self.post_hit.eq(1),
-            sink.connect(mem.sink, omit={"hit"}),
+            self.flush.eq((length != 0) & (mem.level >= (length - 1))),
+            If(mem.level < length,
+                sink.connect(mem.sink, omit={"hit"})
+            ),
             If(mem.level >= length,
                 NextState("IDLE"),
             )
@@ -408,7 +418,10 @@ class LiteScopeAnalyzer(LiteXModule):
             self.rle = _RLE(data_width, storage_width, rle_length)
         self.storage = _Storage(storage_width, depth)
         if with_rle:
-            self.comb += self.rle.external_enable.eq(self.storage.post_hit)
+            self.comb += [
+                self.rle.external_enable.eq(self.storage.post_hit),
+                self.rle.flush.eq(self.storage.flush),
+            ]
 
         # Pipeline: Mux -> Trigger -> Subsampler -> Storage.
         # --------------------------------------------------

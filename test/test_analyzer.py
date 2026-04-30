@@ -190,7 +190,12 @@ class TestAnalyzer(unittest.TestCase):
         run_simulation(dut, generators, clocks)
         self.assertEqual(dut.analyzer.data_width, 4)
         self.assertEqual(dut.analyzer.storage_width, 5)
-        self.assertEqual(dut.data, [5, 5, 0x10 | 3, 0x10 | 3])
+        self.assertEqual(dut.data, [5, 5, 0x10 | 3, 0x10 | 1])
+
+        encoded = DumpData(dut.analyzer.storage_width)
+        encoded.extend(dut.data)
+        decoded = encoded.decode_rle(data_width=dut.analyzer.data_width)
+        self.assertEqual(list(decoded), [5]*6)
 
     def test_analyzer_rle_changing_runs(self):
         def generator(dut):
