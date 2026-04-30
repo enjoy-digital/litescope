@@ -10,6 +10,7 @@ import tempfile
 from migen import *
 
 from litescope import LiteScopeAnalyzer
+from litescope.software.dump.common import DumpData
 
 
 def read_capture(analyzer):
@@ -190,6 +191,59 @@ class TestAnalyzer(unittest.TestCase):
         self.assertEqual(dut.analyzer.data_width, 4)
         self.assertEqual(dut.analyzer.storage_width, 5)
         self.assertEqual(dut.data, [5, 5, 0x10 | 3, 0x10 | 3])
+
+    def test_analyzer_rle_changing_runs(self):
+        def generator(dut):
+            yield from dut.analyzer.trigger.mem_value.write(0)
+            yield from dut.analyzer.trigger.mem_mask.write(0)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+
+            yield from dut.analyzer.rle.enable.write(1)
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(12)
+            yield from dut.analyzer.storage.offset.write(0)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            yield
+
+            seen_busy = False
+            for i in range(256):
+                done = (yield from dut.analyzer.storage.done.read())
+                if not done:
+                    seen_busy = True
+                elif seen_busy:
+                    break
+                yield
+            else:
+                raise TimeoutError("RLE mixed-run capture did not complete")
+
+            dut.data = (yield from read_capture_words(dut.analyzer, 12))
+
+        class DUT(Module):
+            def __init__(self):
+                counter = Signal(8)
+                value   = Signal(4)
+                self.sync += counter.eq(counter + 1)
+                self.comb += value.eq(counter[2:6])
+                self.submodules.analyzer = LiteScopeAnalyzer(value, 64,
+                    with_rle   = True,
+                    rle_length = 8,
+                    csr_csv    = None)
+
+        dut = DUT()
+        generators = {"sys" : [generator(dut)]}
+        clocks     = {"sys": 10, "scope": 10}
+        run_simulation(dut, generators, clocks)
+
+        encoded = DumpData(dut.analyzer.storage_width)
+        encoded.extend(dut.data)
+        decoded = encoded.decode_rle(data_width=dut.analyzer.data_width)
+        decoded_samples = list(decoded)
+
+        self.assertTrue(any(word & 0x10 for word in encoded))
+        self.assertGreater(len(decoded_samples), len(encoded))
+        self.assertGreater(len(set(decoded_samples)), 3)
+        self.assertTrue(all(b in (a, a + 1) for a, b in zip(decoded_samples, decoded_samples[1:])))
 
     def test_analyzer_rle_disabled_keeps_raw_capture(self):
         def generator(dut):
