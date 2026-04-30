@@ -36,7 +36,7 @@ PROMPT = b"litex\x1b[0m> "
 
 
 class LiteScopeSimSoC(SimSoC):
-    def __init__(self, analyzer_csv, **kwargs):
+    def __init__(self, analyzer_csv, analyzer_rle_csv, **kwargs):
         SimSoC.__init__(self,
             integrated_rom_size      = 128*1024,
             integrated_main_ram_size = 64*1024,
@@ -49,10 +49,20 @@ class LiteScopeSimSoC(SimSoC):
             clock_domain = "sys",
             samplerate   = self.sys_clk_freq,
             csr_csv      = analyzer_csv)
+        rle_value = Signal(4, reset=5)
+        self.submodules.analyzer_rle = LiteScopeAnalyzer(rle_value,
+            depth        = 64,
+            clock_domain = "sys",
+            samplerate   = self.sys_clk_freq,
+            with_rle     = True,
+            rle_length   = 8,
+            csr_csv      = analyzer_rle_csv)
         if hasattr(self, "add_csr"):
             self.add_csr("analyzer")
+            self.add_csr("analyzer_rle")
         else:
             self.csr.add("analyzer")
+            self.csr.add("analyzer_rle")
 
 
 def sim_main():
@@ -62,6 +72,7 @@ def sim_main():
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--csr-csv", required=True)
     parser.add_argument("--analyzer-csv", required=True)
+    parser.add_argument("--analyzer-rle-csv", required=True)
     parser.add_argument("--uart-tcp-port", type=int, required=True)
     parser.add_argument("--jobs", type=int, default=1)
     args = parser.parse_args()
@@ -70,11 +81,15 @@ def sim_main():
     sim_config.add_clocker("sys_clk", freq_hz=int(1e6))
     sim_config.add_module("serial2tcp", "serial", args={"port": args.uart_tcp_port})
 
-    soc = LiteScopeSimSoC(analyzer_csv=args.analyzer_csv, uart_name="sim")
+    soc = LiteScopeSimSoC(
+        analyzer_csv     = args.analyzer_csv,
+        analyzer_rle_csv = args.analyzer_rle_csv,
+        uart_name        = "sim")
     builder = Builder(soc, output_dir=args.output_dir, csr_csv=args.csr_csv)
 
     def export_analyzer_csv(vns):
         soc.analyzer.export_csv(vns, args.analyzer_csv)
+        soc.analyzer_rle.export_csv(vns, args.analyzer_rle_csv)
 
     builder.build(
         sim_config       = sim_config,
@@ -164,6 +179,13 @@ class BIOSMemAccess:
         return int.from_bytes(data, "little")
 
 
+def wait_analyzer_done(analyzer, timeout=30, message="LiteScope capture did not complete"):
+    deadline = time.time() + timeout
+    while not analyzer.done():
+        if time.time() > deadline:
+            raise TimeoutError(message)
+
+
 class TestLiteScopeSim(unittest.TestCase):
     @unittest.skipUnless(shutil.which("verilator"), "verilator is required")
     @unittest.skipUnless(pexpect is not None, "pexpect is required")
@@ -175,12 +197,14 @@ class TestLiteScopeSim(unittest.TestCase):
             output_dir   = os.path.join(tmpdir, "build")
             csr_csv      = os.path.join(output_dir, "csr.csv")
             analyzer_csv = os.path.join(tmpdir, "analyzer.csv")
+            analyzer_rle_csv = os.path.join(tmpdir, "analyzer_rle.csv")
             cmd_args = [
                 os.path.abspath(__file__),
                 "--run-sim",
                 "--output-dir", output_dir,
                 "--csr-csv", csr_csv,
                 "--analyzer-csv", analyzer_csv,
+                "--analyzer-rle-csv", analyzer_rle_csv,
                 "--uart-tcp-port", str(port),
                 "--jobs", str(sim_jobs()),
             ]
@@ -212,11 +236,7 @@ class TestLiteScopeSim(unittest.TestCase):
                     analyzer.configure_trigger()
                     analyzer.configure_subsampler(1)
                     analyzer.run(offset=0, length=16)
-
-                    deadline = time.time() + 30
-                    while not analyzer.done():
-                        if time.time() > deadline:
-                            raise TimeoutError("LiteScope capture did not complete")
+                    wait_analyzer_done(analyzer)
 
                     data = analyzer.upload()
                     samples = list(data)
@@ -224,6 +244,27 @@ class TestLiteScopeSim(unittest.TestCase):
                     self.assertLessEqual(len(samples), 16)
                     self.assertEqual(data.width, 32)
                     self.assertEqual(samples, list(range(samples[0], samples[0] + len(samples))))
+
+                    analyzer_rle = LiteScopeAnalyzerDriver(bus.regs, "analyzer_rle", config_csv=analyzer_rle_csv)
+                    self.assertEqual(analyzer_rle.data_width, 4)
+                    self.assertEqual(analyzer_rle.storage_width, 5)
+                    self.assertEqual(analyzer_rle.depth, 64)
+                    self.assertEqual(analyzer_rle.with_rle, 1)
+                    self.assertEqual(analyzer_rle.layouts[0], [("rle_value", 4)])
+
+                    analyzer_rle.configure_trigger()
+                    analyzer_rle.configure_subsampler(1)
+                    analyzer_rle.configure_rle(True)
+                    analyzer_rle.run(offset=0, length=32)
+                    wait_analyzer_done(analyzer_rle, message="LiteScope RLE capture did not complete")
+
+                    encoded_words = analyzer_rle.storage_mem_level.read()
+                    rle_data = analyzer_rle.upload()
+                    rle_samples = list(rle_data)
+                    self.assertGreater(encoded_words, 0)
+                    self.assertGreater(len(rle_samples), encoded_words)
+                    self.assertEqual(rle_data.width, 4)
+                    self.assertTrue(all(sample == 5 for sample in rle_samples))
                 except Exception:
                     log_file.seek(0)
                     print(log_file.read())
