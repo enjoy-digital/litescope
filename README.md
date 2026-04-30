@@ -35,11 +35,52 @@ design flow by generating the verilog rtl that you will use as a standard core.
   - Subsampling.
   - Data storage in Block RAM.
   - Configurable triggers.
+  - Optional run-length encoding (RLE) for repeated samples.
 - Bridges:
   - UART <--> Wishbone (provided by LiteX)
   - Ethernet <--> Wishbone ("Etherbone") (provided by LiteEth)
   - PCIe <--> Wishbone (provided by LitePCIe)
 - Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
+
+[> Run-Length Encoding
+----------------------
+LiteScopeAnalyzer can optionally compress repeated samples before storing them:
+
+```python
+analyzer = LiteScopeAnalyzer(
+    signals,
+    depth      = 1024,
+    with_rle   = True,
+    rle_length = 256,
+)
+```
+
+RLE is disabled by default. With the default `with_rle=False`, the analyzer
+datapath and storage width remain the same as a non-RLE analyzer, so existing
+designs keep the normal raw capture behavior.
+
+When RLE is enabled at build time, software can enable it for a capture:
+
+```python
+analyzer = LiteScopeAnalyzerDriver(bus.regs, "analyzer", config_csv="analyzer.csv")
+analyzer.configure_rle(True)
+```
+
+The encoder stores raw samples and repeat-count words. The stored word MSB is
+used as the RLE marker bit: marker `0` is a raw sample, marker `1` repeats the
+previous sample by the encoded count. The driver expands RLE captures back to
+normal `DumpData`, so dump/export users see logical samples.
+
+Compression depends on signal activity:
+- No repeated samples: no word-count compression; this is the worst case.
+- A run of `N` identical samples stores as:
+  `1 + ceil((N - 1) / (rle_length - 1))` encoded words.
+- With `rle_length=256`, a stable 256-sample run stores in 2 words, and a
+  stable 1024-sample run stores in 6 words.
+
+With RLE enabled, `depth` and capture `length` describe encoded storage words,
+not final decoded sample count. A compressed capture can therefore decode to
+more logical samples than the configured storage length.
 
 [> Proven
 ---------
@@ -53,6 +94,8 @@ open-source designs.
 - add signals injection/generation
 - add storage in DRAM
 - add storage in HDD with LiteSATA core
+- add representative FPGA timing checks for optional analyzer features such as RLE
+- add more simulation transports to CI, such as Etherbone in addition to the virtual UART path
 - ... See below Support and consulting :)
 
 If you want to support these features, please contact us at florent [AT]
@@ -66,16 +109,21 @@ enjoy-digital.fr.
 
 [> Tests
 --------
-Unit tests are available in ./test/.
-To run all the unit tests:
+Unit and simulation tests are available in ./test/.
+To run the full test suite:
 ```sh
-$ ./setup.py test
+$ python3 -m pytest -q
 ```
 
 Tests can also be run individually:
 ```sh
-$ python3 -m unittest test.test_name
+$ python3 -m pytest -q test/test_driver.py
 ```
+
+The CI suite includes a `litex_sim`/Verilator end-to-end test that instantiates
+LiteScopeAnalyzer, controls it through a simulated LiteX UART BIOS console, and
+uploads captures through LiteScopeAnalyzerDriver. This covers both normal raw
+captures and RLE captures in simulation.
 
 [> License
 ----------
