@@ -20,6 +20,14 @@ def read_capture(analyzer):
     return data
 
 
+def read_capture_words(analyzer, length):
+    data = []
+    for i in range(length):
+        data.append((yield from analyzer.storage.mem_data.read()))
+        yield
+    return data
+
+
 class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         def generator(dut):
@@ -98,6 +106,49 @@ class TestAnalyzer(unittest.TestCase):
         run_simulation(dut, generators, clocks)
         self.assertEqual(dut.data, [132 + 3*i for i in range(len(dut.data))])
 
+    def test_analyzer_rle_constant_signal(self):
+        def generator(dut):
+            yield from dut.analyzer.trigger.mem_value.write(0)
+            yield from dut.analyzer.trigger.mem_mask.write(0)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+
+            yield from dut.analyzer.rle.enable.write(1)
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(4)
+            yield from dut.analyzer.storage.offset.write(0)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            yield
+
+            seen_busy = False
+            for i in range(128):
+                done = (yield from dut.analyzer.storage.done.read())
+                if not done:
+                    seen_busy = True
+                elif seen_busy:
+                    break
+                yield
+            else:
+                raise TimeoutError("RLE capture did not complete")
+
+            dut.data = (yield from read_capture_words(dut.analyzer, 4))
+
+        class DUT(Module):
+            def __init__(self):
+                value = Signal(4, reset=5)
+                self.submodules.analyzer = LiteScopeAnalyzer(value, 16,
+                    with_rle   = True,
+                    rle_length = 4,
+                    csr_csv    = None)
+
+        dut = DUT()
+        generators = {"sys" : [generator(dut)]}
+        clocks     = {"sys": 10, "scope": 10}
+        run_simulation(dut, generators, clocks)
+        self.assertEqual(dut.analyzer.data_width, 4)
+        self.assertEqual(dut.analyzer.storage_width, 5)
+        self.assertEqual(dut.data, [5, 5, 0x10 | 3, 0x10 | 3])
+
     def test_format_groups_splits_records_and_deduplicates(self):
         signal = Signal(1)
         record = Record([("field0", 3), ("field1", 5)])
@@ -129,8 +180,11 @@ class TestAnalyzer(unittest.TestCase):
 
         self.assertEqual(lines, [
             "config,None,data_width,5",
+            "config,None,storage_width,5",
             "config,None,depth,32",
             "config,None,samplerate,125000000",
+            "config,None,with_rle,0",
+            "config,None,rle_length,256",
             "signal,0,signal_a,3",
             "signal,1,signal_b,5",
         ])

@@ -127,6 +127,108 @@ class _SubSampler(LiteXModule):
             source.valid.eq(sink.valid & done)
         ]
 
+# LiteScope Analyzer Run Length Encoder -----------------------------------------------------------
+
+class _RLE(LiteXModule):
+    def __init__(self, data_width, storage_width, length):
+        assert length >= 2
+
+        self.sink   = sink   = stream.Endpoint(core_layout(data_width))
+        self.source = source = stream.Endpoint(core_layout(storage_width))
+
+        self.enable = CSRStorage()
+        self.external_enable = Signal(reset=1)
+
+        # # #
+
+        enable = Signal()
+        active_enable = Signal()
+        self.specials += MultiReg(self.enable.storage, enable, "scope")
+        self.comb += active_enable.eq(enable & self.external_enable)
+
+        count_width  = bits_for(length - 1)
+        marker_bit   = storage_width - 1
+        max_count    = length - 1
+        last_data    = Signal(data_width)
+        pending_data = Signal(data_width)
+        pending_hit  = Signal()
+        count        = Signal(count_width)
+        rle_data     = Signal(storage_width)
+
+        self.comb += [
+            rle_data[:count_width].eq(count),
+            rle_data[marker_bit].eq(1),
+        ]
+
+        def emit_raw(data, hit):
+            return [
+                source.valid.eq(1),
+                source.data.eq(data),
+                source.hit.eq(hit),
+            ]
+
+        def emit_rle():
+            return [
+                source.valid.eq(1),
+                source.data.eq(rle_data),
+                source.hit.eq(1),
+            ]
+
+        fsm = FSM(reset_state="BYPASS")
+        fsm = ClockDomainsRenamer("scope")(fsm)
+        self.submodules += fsm
+
+        fsm.act("BYPASS",
+            source.valid.eq(sink.valid),
+            source.data.eq(sink.data),
+            source.hit.eq(sink.hit),
+            sink.ready.eq(source.ready),
+            If(sink.valid & source.ready & active_enable & sink.hit,
+                NextValue(last_data, sink.data),
+                NextState("RUN")
+            )
+        )
+        fsm.act("RUN",
+            If(~active_enable,
+                NextValue(count, 0),
+                NextState("BYPASS")
+            ).Elif(count == max_count,
+                emit_rle(),
+                If(source.ready,
+                    NextValue(count, 0)
+                )
+            ).Elif(sink.valid,
+                If(sink.data == last_data,
+                    sink.ready.eq(1),
+                    NextValue(count, count + 1)
+                ).Else(
+                    If(count != 0,
+                        emit_rle(),
+                        sink.ready.eq(source.ready),
+                        If(source.ready,
+                            NextValue(count, 0),
+                            NextValue(pending_data, sink.data),
+                            NextValue(pending_hit,  sink.hit),
+                            NextState("EMIT_RAW")
+                        )
+                    ).Else(
+                        emit_raw(sink.data, sink.hit),
+                        sink.ready.eq(source.ready),
+                        If(source.ready,
+                            NextValue(last_data, sink.data)
+                        )
+                    )
+                )
+            )
+        )
+        fsm.act("EMIT_RAW",
+            emit_raw(pending_data, pending_hit),
+            If(source.ready,
+                NextValue(last_data, pending_data),
+                NextState("RUN")
+            )
+        )
+
 # LiteScope Analyzer Mux ---------------------------------------------------------------------------
 
 class _Mux(LiteXModule):
@@ -151,6 +253,7 @@ class _Mux(LiteXModule):
 class _Storage(LiteXModule):
     def __init__(self, data_width, depth):
         self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.post_hit = Signal()
 
         self.enable    = CSRStorage()
         self.done      = CSRStatus()
@@ -223,6 +326,7 @@ class _Storage(LiteXModule):
             mem.source.ready.eq(mem.level >= offset)
         )
         fsm.act("RUN",
+            self.post_hit.eq(1),
             sink.connect(mem.sink, omit={"hit"}),
             If(mem.level >= length,
                 NextState("IDLE"),
@@ -253,6 +357,8 @@ class LiteScopeAnalyzer(LiteXModule):
         clock_domain  = "sys",
         trigger_depth = 16,
         register      = False,
+        with_rle      = False,
+        rle_length    = 256,
         csr_csv       = "analyzer.csv",
     ):
         self.groups     = groups = self.format_groups(groups)
@@ -260,6 +366,11 @@ class LiteScopeAnalyzer(LiteXModule):
         self.samplerate = int(samplerate)
 
         self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
+        self.with_rle   = with_rle
+        self.rle_length = rle_length
+        self.storage_width = storage_width = data_width
+        if with_rle:
+            self.storage_width = storage_width = max(data_width, bits_for(rle_length - 1)) + 1
 
         self.csr_csv = csr_csv
 
@@ -293,16 +404,23 @@ class LiteScopeAnalyzer(LiteXModule):
 
         # Storage.
         # --------
-        self.storage = _Storage(data_width, depth)
+        if with_rle:
+            self.rle = _RLE(data_width, storage_width, rle_length)
+        self.storage = _Storage(storage_width, depth)
+        if with_rle:
+            self.comb += self.rle.external_enable.eq(self.storage.post_hit)
 
         # Pipeline: Mux -> Trigger -> Subsampler -> Storage.
         # --------------------------------------------------
-        self.pipeline = stream.Pipeline(
+        pipeline = [
             self.mux,
             self.trigger,
             self.subsampler,
-            self.storage,
-        )
+        ]
+        if with_rle:
+            pipeline.append(self.rle)
+        pipeline.append(self.storage)
+        self.pipeline = stream.Pipeline(*pipeline)
 
     def format_groups(self, groups):
         if not isinstance(groups, dict):
@@ -330,8 +448,11 @@ class LiteScopeAnalyzer(LiteXModule):
         def format_line(*args):
             return ",".join(args) + "\n"
         r = format_line("config", "None", "data_width", str(self.data_width))
+        r += format_line("config", "None", "storage_width", str(self.storage_width))
         r += format_line("config", "None", "depth", str(self.depth))
         r += format_line("config", "None", "samplerate", str(self.samplerate))
+        r += format_line("config", "None", "with_rle", str(int(self.with_rle)))
+        r += format_line("config", "None", "rle_length", str(self.rle_length))
         for i, signals in self.groups.items():
             for s in signals:
                 r += format_line("signal", str(i), vns.get_name(s), str(len(s)))
