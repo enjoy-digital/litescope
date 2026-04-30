@@ -136,6 +136,18 @@ class TestAnalyzerDriver(unittest.TestCase):
             driver.configure_rle(True)
         driver.configure_rle(False)
 
+    def test_clear_disables_rle_when_available(self):
+        driver, regs = self.make_driver(data_width=4, storage_width=5, with_rle=True)
+        self.clear_writes(regs)
+
+        driver.configure_rle(True)
+        driver.clear()
+
+        self.assertFalse(driver.rle_enabled)
+        self.assertEqual(regs.d["analyzer_rle_enable"].writes, [1, 0])
+        self.assertEqual(regs.d["analyzer_trigger_enable"].writes, [0])
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
+
     def test_conditional_trigger_parsing(self):
         driver, regs = self.make_driver()
         self.clear_writes(regs)
@@ -212,6 +224,26 @@ class TestAnalyzerDriver(unittest.TestCase):
         ])
         self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
             (0x1234, 6, "fixed"),
+        ])
+
+    def test_upload_legacy_config_without_rle_metadata_is_raw(self):
+        mem_data = [
+            0x00000082,
+            0x00000003,
+        ]
+        driver, regs = self.make_driver(
+            data_width = 8,
+            mem_level  = 2,
+            mem_data   = mem_data)
+
+        data = driver.upload()
+
+        self.assertEqual(driver.storage_width, driver.data_width)
+        self.assertEqual(driver.with_rle, 0)
+        self.assertEqual(data.width, 8)
+        self.assertEqual(list(data), [0x82, 0x03])
+        self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
+            (0x1234, 2, "fixed"),
         ])
 
     def test_upload_decodes_rle(self):

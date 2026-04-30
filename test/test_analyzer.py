@@ -149,6 +149,49 @@ class TestAnalyzer(unittest.TestCase):
         self.assertEqual(dut.analyzer.storage_width, 5)
         self.assertEqual(dut.data, [5, 5, 0x10 | 3, 0x10 | 3])
 
+    def test_analyzer_rle_disabled_keeps_raw_capture(self):
+        def generator(dut):
+            yield from dut.analyzer.trigger.mem_value.write(0)
+            yield from dut.analyzer.trigger.mem_mask.write(0)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(8)
+            yield from dut.analyzer.storage.offset.write(0)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            yield
+
+            seen_busy = False
+            for i in range(128):
+                done = (yield from dut.analyzer.storage.done.read())
+                if not done:
+                    seen_busy = True
+                elif seen_busy:
+                    break
+                yield
+            else:
+                raise TimeoutError("RLE-disabled capture did not complete")
+
+            dut.data = (yield from read_capture_words(dut.analyzer, 8))
+
+        class DUT(Module):
+            def __init__(self):
+                counter = Signal(8)
+                self.sync += counter.eq(counter + 1)
+                self.submodules.analyzer = LiteScopeAnalyzer(counter, 16,
+                    with_rle   = True,
+                    rle_length = 8,
+                    csr_csv    = None)
+
+        dut = DUT()
+        generators = {"sys" : [generator(dut)]}
+        clocks     = {"sys": 10, "scope": 10}
+        run_simulation(dut, generators, clocks)
+        self.assertEqual(dut.analyzer.data_width, 8)
+        self.assertEqual(dut.analyzer.storage_width, 9)
+        self.assertEqual(dut.data, list(range(dut.data[0], dut.data[0] + len(dut.data))))
+
     def test_format_groups_splits_records_and_deduplicates(self):
         signal = Signal(1)
         record = Record([("field0", 3), ("field1", 5)])

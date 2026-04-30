@@ -68,6 +68,38 @@ class TestDump(unittest.TestCase):
         self.assertEqual(decoded.width, 4)
         self.assertEqual(list(decoded), [3, 3, 3, 3, 3, 3, 3, 10, 10])
 
+    def test_dumpdata_decode_rle_empty_and_leading_marker(self):
+        data = DumpData(5)
+        decoded = data.decode_rle()
+
+        self.assertEqual(decoded.width, 4)
+        self.assertEqual(list(decoded), [])
+
+        data.extend([
+            0x10 | 0x3,   # Repeat the default previous sample.
+            0x6,          # Raw 6.
+            0x10 | 0x2,   # Repeat 6 two times.
+        ])
+
+        decoded = data.decode_rle()
+
+        self.assertEqual(decoded.width, 4)
+        self.assertEqual(list(decoded), [0, 0, 0, 6, 6, 6])
+
+    def test_dumpdata_decode_rle_consecutive_run_markers(self):
+        data = DumpData(5)
+        data.extend([
+            0x9,          # Raw 9.
+            0x10 | 0xf,   # Repeat 9 fifteen times.
+            0x10 | 0x4,   # Repeat 9 four more times.
+            0x2,          # Raw 2.
+        ])
+
+        decoded = data.decode_rle()
+
+        self.assertEqual(decoded.width, 4)
+        self.assertEqual(list(decoded), [9]*20 + [2])
+
     def test_add_from_layout(self):
         data = DumpData(8)
         data.extend([0b10110001, 0b01001110])
