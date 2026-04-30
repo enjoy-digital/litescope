@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
+import random
 import tempfile
 import unittest
 
@@ -72,6 +73,43 @@ def make_regs(name="analyzer", mem_level=0, mem_data=None, with_rle=False):
     if with_rle:
         regs["rle_enable"] = FakeReg()
     return FakeRegs(name, regs)
+
+
+def encode_rle(samples, data_width, storage_width, max_count):
+    data_mask = 2**data_width - 1
+    marker    = 1 << (storage_width - 1)
+    encoded   = []
+    if not samples:
+        return encoded
+
+    last = samples[0] & data_mask
+    encoded.append(last)
+    repeats = 0
+    for sample in samples[1:]:
+        sample &= data_mask
+        if sample == last:
+            repeats += 1
+            continue
+        while repeats:
+            count = min(repeats, max_count)
+            encoded.append(marker | count)
+            repeats -= count
+        encoded.append(sample)
+        last = sample
+    while repeats:
+        count = min(repeats, max_count)
+        encoded.append(marker | count)
+        repeats -= count
+    return encoded
+
+
+def pack_storage_words(words, storage_width):
+    datas = []
+    swpw  = (storage_width + 31) // 32
+    for word in words:
+        for i in range(swpw):
+            datas.append((word >> (32*i)) & 0xffffffff)
+    return datas
 
 
 class TestAnalyzerDriver(unittest.TestCase):
@@ -348,6 +386,43 @@ class TestAnalyzerDriver(unittest.TestCase):
 
         self.assertEqual(data.width, 4)
         self.assertEqual(list(data), [])
+
+    def test_upload_decodes_randomized_rle_storage_streams(self):
+        rng = random.Random(17)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for i in range(32):
+                data_width    = rng.randint(1, 40)
+                count_width   = rng.randint(1, 8)
+                storage_width = max(data_width, count_width) + 1
+                max_count     = rng.randint(1, 2**count_width - 1)
+
+                samples = []
+                for j in range(rng.randint(0, 20)):
+                    value = rng.randrange(2**data_width)
+                    run   = rng.randint(1, 2*max_count + 1)
+                    samples.extend([value]*run)
+
+                encoded = encode_rle(samples, data_width, storage_width, max_count)
+                mem_data = pack_storage_words(encoded, storage_width)
+                config_csv = os.path.join(tmpdir, f"analyzer_{i}.csv")
+                write_config(config_csv,
+                    data_width    = data_width,
+                    storage_width = storage_width,
+                    with_rle      = 1,
+                    rle_length    = max_count + 1)
+                regs = make_regs(
+                    mem_level = len(encoded),
+                    mem_data  = mem_data,
+                    with_rle  = True)
+                driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
+                driver.configure_rle(True)
+
+                max_samples = None if i % 3 else rng.randint(0, len(samples) + 4)
+                data = driver.upload(max_samples=max_samples)
+                expected = samples if max_samples is None else samples[:max_samples]
+
+                self.assertEqual(data.width, data_width)
+                self.assertEqual(list(data), expected)
 
     def test_upload_rejects_negative_sample_limit(self):
         driver, regs = self.make_driver(data_width=8, mem_level=0)
