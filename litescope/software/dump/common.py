@@ -52,6 +52,24 @@ class DumpData(list):
         else:
             raise KeyError
 
+    def decode_rle(self, data_width=None):
+        marker_bit = self.width - 1
+        data_width = marker_bit if data_width is None else data_width
+        data_mask  = 2**data_width - 1
+        rle_mask   = 2**marker_bit - 1
+
+        datas = DumpData(data_width)
+        last_data = 0
+        for data in self:
+            rle = data >> marker_bit
+            payload = data & rle_mask
+            if rle:
+                datas.extend([last_data]*payload)
+            else:
+                last_data = payload & data_mask
+                datas.append(last_data)
+        return datas
+
 
 class DumpVariable:
     def __init__(self, name, width, values=[]):

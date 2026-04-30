@@ -39,6 +39,35 @@ class TestDump(unittest.TestCase):
         with self.assertRaises(KeyError):
             data[0:4:2]
 
+    def test_dumpdata_decode_rle(self):
+        data = DumpData(5)
+        data.extend([
+            0x3,          # Raw 3.
+            0x10 | 0x2,   # Repeat 3 two times.
+            0x7,          # Raw 7.
+            0x10 | 0x0,   # Zero-repeat marker.
+            0x10 | 0x3,   # Repeat 7 three times.
+        ])
+
+        decoded = data.decode_rle()
+
+        self.assertEqual(decoded.width, 4)
+        self.assertEqual(list(decoded), [3, 3, 3, 7, 7, 7, 7])
+
+    def test_dumpdata_decode_rle_with_padded_storage_width(self):
+        data = DumpData(8)
+        data.extend([
+            0x23,         # Raw 3 with padding bits set.
+            0x80 | 0x6,   # Repeat 3 six times.
+            0x0a,         # Raw 10.
+            0x80 | 0x1,   # Repeat 10 one time.
+        ])
+
+        decoded = data.decode_rle(data_width=4)
+
+        self.assertEqual(decoded.width, 4)
+        self.assertEqual(list(decoded), [3, 3, 3, 3, 3, 3, 3, 10, 10])
+
     def test_add_from_layout(self):
         data = DumpData(8)
         data.extend([0b10110001, 0b01001110])
