@@ -1,7 +1,7 @@
 #
 # This file is part of LiteScope.
 #
-# Copyright (c) 2015-2017 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2015-2026 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 class LiteScopeIODriver:

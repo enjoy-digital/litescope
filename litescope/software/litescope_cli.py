@@ -4,7 +4,7 @@
 # This file is part of LiteScope.
 #
 # Copyright (c) 2020 Antmicro <www.antmicro.com>
-# Copyright (c) 2020 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2020-2026 Florent Kermarrec <florent@enjoy-digital.fr>
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os

@@ -1,7 +1,7 @@
 #
 # This file is part of LiteScope.
 #
-# Copyright (c) 2015-2018 Florent Kermarrec <florent@enjoy-digital.fr>
+# Copyright (c) 2015-2026 Florent Kermarrec <florent@enjoy-digital.fr>
 # Copyright (c) 2019 kees.jongenburger <kees.jongenburger@gmail.com>
 # Copyright (c) 2018 Sean Cross <sean@xobs.io>
 # SPDX-License-Identifier: BSD-2-Clause
