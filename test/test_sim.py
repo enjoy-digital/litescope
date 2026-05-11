@@ -112,10 +112,12 @@ def get_free_tcp_port():
         sock.close()
 
 
-def connect_tcp(port, timeout=30):
+def connect_tcp(port, timeout=30, process=None):
     deadline = time.time() + timeout
     last_error = None
     while time.time() < deadline:
+        if process is not None and not process.isalive():
+            raise RuntimeError(f"litex_sim exited before UART port {port} accepted connections")
         try:
             sock = socket.create_connection(("127.0.0.1", port), timeout=1)
             sock.settimeout(0.1)
@@ -217,8 +219,7 @@ class TestLiteScopeSim(unittest.TestCase):
                     encoding = sys.getdefaultencoding(),
                     logfile  = log_file)
                 try:
-                    p.expect(f"Found port {port}", timeout=1200)
-                    sock = connect_tcp(port)
+                    sock = connect_tcp(port, timeout=1200, process=p)
 
                     console = UARTConsole(sock)
                     console.recv_until_prompt(timeout=120)
