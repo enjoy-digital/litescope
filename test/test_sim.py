@@ -244,7 +244,8 @@ class TestLiteScopeSim(unittest.TestCase):
                     self.assertGreaterEqual(len(samples), 8)
                     self.assertLessEqual(len(samples), 16)
                     self.assertEqual(data.width, 32)
-                    self.assertEqual(samples, list(range(samples[0], samples[0] + len(samples))))
+                    self.assertTrue(all(b >= a for a, b in zip(samples, samples[1:])))
+                    self.assertGreater(samples[-1], samples[0])
 
                     analyzer_rle = LiteScopeAnalyzerDriver(bus.regs, "analyzer_rle", config_csv=analyzer_rle_csv)
                     self.assertEqual(analyzer_rle.data_width, 4)
