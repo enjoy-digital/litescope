@@ -71,7 +71,7 @@ class _Trigger(LiteXModule):
         mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
         self.submodules += mem
         self.comb += [
-            mem.sink.valid.eq(self.mem_write.re),
+            mem.sink.valid.eq(self.mem_write.wr_stb),
             mem.sink.mask.eq(self.mem_mask.storage),
             mem.sink.value.eq(self.mem_value.storage),
             self.mem_full.status.eq(~mem.sink.ready)
@@ -355,7 +355,7 @@ class _Storage(LiteXModule):
             self.comb += cdc.source.connect(read_source)
 
         self.comb += [
-            read_source.ready.eq(self.mem_data.we | ~self.enable.storage),
+            read_source.ready.eq(self.mem_data.rd_stb | ~self.enable.storage),
             self.mem_data.status.eq(read_source.data)
         ]
 
