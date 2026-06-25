@@ -99,18 +99,20 @@ class _Trigger(LiteXModule):
 # LiteScope Analyzer SubSampler --------------------------------------------------------------------
 
 class _SubSampler(LiteXModule):
-    def __init__(self, data_width):
+    def __init__(self, data_width, value_width=16):
+        assert value_width >= 1
+
         self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
 
-        self.value = CSRStorage(16)
+        self.value = CSRStorage(value_width)
 
         # # #
 
-        value = Signal(16)
+        value = Signal(value_width)
         self.specials += MultiReg(self.value.storage, value, "scope")
 
-        counter = Signal(16)
+        counter = Signal(value_width)
         done    = Signal()
         self.sync.scope += \
             If(source.ready,
@@ -363,17 +365,19 @@ class _Storage(LiteXModule):
 
 class LiteScopeAnalyzer(LiteXModule):
     def __init__(self, groups, depth,
-        samplerate    = 1e12,
-        clock_domain  = "sys",
-        trigger_depth = 16,
-        register      = False,
-        with_rle      = False,
-        rle_length    = 256,
-        csr_csv       = "analyzer.csv",
+        samplerate       = 1e12,
+        clock_domain     = "sys",
+        trigger_depth    = 16,
+        subsampler_width = 16,
+        register         = False,
+        with_rle         = False,
+        rle_length       = 256,
+        csr_csv          = "analyzer.csv",
     ):
-        self.groups     = groups = self.format_groups(groups)
-        self.depth      = depth
-        self.samplerate = int(samplerate)
+        self.groups           = groups = self.format_groups(groups)
+        self.depth            = depth
+        self.samplerate       = int(samplerate)
+        self.subsampler_width = subsampler_width
 
         self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
         self.with_rle   = with_rle
@@ -410,7 +414,7 @@ class LiteScopeAnalyzer(LiteXModule):
         # Frontend.
         # ---------
         self.trigger    = _Trigger(data_width, depth=trigger_depth)
-        self.subsampler = _SubSampler(data_width)
+        self.subsampler = _SubSampler(data_width, value_width=subsampler_width)
 
         # Storage.
         # --------
@@ -464,6 +468,7 @@ class LiteScopeAnalyzer(LiteXModule):
         r += format_line("config", "None", "storage_width", str(self.storage_width))
         r += format_line("config", "None", "depth", str(self.depth))
         r += format_line("config", "None", "samplerate", str(self.samplerate))
+        r += format_line("config", "None", "subsampler_width", str(self.subsampler_width))
         r += format_line("config", "None", "with_rle", str(int(self.with_rle)))
         r += format_line("config", "None", "rle_length", str(self.rle_length))
         for i, signals in self.groups.items():

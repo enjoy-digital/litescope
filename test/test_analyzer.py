@@ -308,7 +308,7 @@ class TestAnalyzer(unittest.TestCase):
         analyzer = LiteScopeAnalyzer({
             0: signal_a,
             1: signal_b,
-        }, depth=32, samplerate=125e6, csr_csv=None)
+        }, depth=32, samplerate=125e6, subsampler_width=20, csr_csv=None)
 
         class VNS:
             def get_name(self, signal):
@@ -327,6 +327,7 @@ class TestAnalyzer(unittest.TestCase):
             "config,None,storage_width,5",
             "config,None,depth,32",
             "config,None,samplerate,125000000",
+            "config,None,subsampler_width,20",
             "config,None,with_rle,0",
             "config,None,rle_length,256",
             "signal,0,signal_a,3",

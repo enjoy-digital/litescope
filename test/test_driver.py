@@ -38,13 +38,16 @@ class FakeRegs:
 
 
 def write_config(filename, data_width=8, depth=16, samplerate=100000000,
-                 storage_width=None, with_rle=None, rle_length=None):
+                 storage_width=None, subsampler_width=None,
+                 with_rle=None, rle_length=None):
     with open(filename, "w") as f:
         f.write(f"config,None,data_width,{data_width}\n")
         if storage_width is not None:
             f.write(f"config,None,storage_width,{storage_width}\n")
         f.write(f"config,None,depth,{depth}\n")
         f.write(f"config,None,samplerate,{samplerate}\n")
+        if subsampler_width is not None:
+            f.write(f"config,None,subsampler_width,{subsampler_width}\n")
         if with_rle is not None:
             f.write(f"config,None,with_rle,{int(with_rle)}\n")
         if rle_length is not None:
@@ -114,15 +117,17 @@ def pack_storage_words(words, storage_width):
 
 class TestAnalyzerDriver(unittest.TestCase):
     def make_driver(self, data_width=8, depth=16, mem_level=0, mem_data=None,
-                    storage_width=None, with_rle=False, rle_length=256):
+                    storage_width=None, subsampler_width=None,
+                    with_rle=False, rle_length=256):
         self.tmpdir = tempfile.TemporaryDirectory()
         config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
         write_config(config_csv,
-            data_width    = data_width,
-            depth         = depth,
-            storage_width = storage_width,
-            with_rle      = with_rle if with_rle else None,
-            rle_length    = rle_length if with_rle else None)
+            data_width       = data_width,
+            depth            = depth,
+            storage_width    = storage_width,
+            subsampler_width = subsampler_width,
+            with_rle         = with_rle if with_rle else None,
+            rle_length       = rle_length if with_rle else None)
         regs = make_regs(mem_level=mem_level, mem_data=mem_data, with_rle=with_rle)
         driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
         return driver, regs
@@ -142,6 +147,7 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(driver.storage_width, 8)
         self.assertEqual(driver.depth, 16)
         self.assertEqual(driver.samplerate, 100000000)
+        self.assertEqual(driver.subsampler_width, 16)
         self.assertEqual(driver.with_rle, 0)
         self.assertEqual(driver.layouts, {
             0: [("flag", 1), ("state", 3)],
@@ -224,16 +230,18 @@ class TestAnalyzerDriver(unittest.TestCase):
             driver.add_trigger(value=1, mask=1)
 
     def test_configure_subsampler_and_run(self):
-        driver, regs = self.make_driver(depth=8)
+        driver, regs = self.make_driver(depth=8, subsampler_width=4)
         self.clear_writes(regs)
 
         driver.configure_subsampler(4)
+        driver.configure_subsampler(16)
         driver.run(offset=2, length=5)
 
-        self.assertEqual(driver.subsampling, 4)
+        self.assertEqual(driver.subsampling, 16)
+        self.assertEqual(driver.subsampler_width, 4)
         self.assertEqual(driver.offset, 2)
         self.assertEqual(driver.length, 5)
-        self.assertEqual(regs.d["analyzer_subsampler_value"].writes, [3])
+        self.assertEqual(regs.d["analyzer_subsampler_value"].writes, [3, 15])
         self.assertEqual(regs.d["analyzer_storage_offset"].writes,   [2])
         self.assertEqual(regs.d["analyzer_storage_length"].writes,   [5])
         self.assertEqual(regs.d["analyzer_storage_enable"].writes,   [1])
@@ -243,6 +251,16 @@ class TestAnalyzerDriver(unittest.TestCase):
             driver.run(offset=8)
         with self.assertRaises(AssertionError):
             driver.run(length=9)
+
+    def test_configure_subsampler_rejects_invalid_values(self):
+        driver, regs = self.make_driver(subsampler_width=4)
+
+        with self.assertRaises(ValueError):
+            driver.configure_subsampler(0)
+        with self.assertRaises(ValueError):
+            driver.configure_subsampler(17)
+
+        self.assertEqual(regs.d["analyzer_subsampler_value"].writes, [])
 
     def test_upload_packs_32bit_subwords(self):
         mem_data = [

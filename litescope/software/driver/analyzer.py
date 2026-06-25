@@ -83,9 +83,10 @@ class LiteScopeAnalyzerDriver:
             t, g, n, v = item
             if t == "config":
                 setattr(self, n, int(v))
-        self.storage_width = getattr(self, "storage_width", self.data_width)
-        self.with_rle      = getattr(self, "with_rle", 0)
-        self.rle_length    = getattr(self, "rle_length", 0)
+        self.storage_width     = getattr(self, "storage_width", self.data_width)
+        self.with_rle          = getattr(self, "with_rle", 0)
+        self.rle_length        = getattr(self, "rle_length", 0)
+        self.subsampler_width = getattr(self, "subsampler_width", 16)
 
     def get_layouts(self):
         self.layouts = {}
@@ -159,6 +160,11 @@ class LiteScopeAnalyzerDriver:
         self.add_trigger(value, mask, cond)
 
     def configure_subsampler(self, value):
+        if value < 1:
+            raise ValueError("Subsampling must be >= 1")
+        max_subsampling = 2**self.subsampler_width
+        if value > max_subsampling:
+            raise ValueError("Subsampling must be <= {:d}".format(max_subsampling))
         self.subsampling = value
         self.subsampler_value.write(value-1)
 
