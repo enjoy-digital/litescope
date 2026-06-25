@@ -152,6 +152,7 @@ class TestCLI(unittest.TestCase):
             open(csr_csv, "w").close()
             args = type("Args", (), {
                 "host"          : "127.0.0.1",
+                "port"          : "2345",
                 "csr_csv"       : csr_csv,
                 "csv"           : csvname,
                 "group"         : 0,
@@ -170,6 +171,9 @@ class TestCLI(unittest.TestCase):
                     litescope_cli.run_batch(args)
 
         self.assertEqual(len(FakeBus.instances), 1)
+        self.assertEqual(FakeBus.instances[0].host, "127.0.0.1")
+        self.assertEqual(FakeBus.instances[0].port, "2345")
+        self.assertEqual(FakeBus.instances[0].csr_csv, csr_csv)
         self.assertTrue(FakeBus.instances[0].opened)
         self.assertTrue(FakeBus.instances[0].closed)
         self.assertEqual(len(FakeAnalyzer.instances), 1)

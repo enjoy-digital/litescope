@@ -80,7 +80,7 @@ def add_triggers(args, analyzer, signals):
 # Run Batch/GUI  -----------------------------------------------------------------------------------
 
 def run_batch(args):
-    bus = RemoteClient(host=args.host, csr_csv=args.csr_csv)
+    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
     bus.open()
 
     basename = os.path.splitext(os.path.basename(args.csv))[0]
