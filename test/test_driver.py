@@ -8,8 +8,10 @@ import os
 import random
 import tempfile
 import unittest
+import zipfile
 
 from litescope import LiteScopeAnalyzerDriver
+from litescope.software.dump.common import DumpData
 
 
 class FakeReg:
@@ -464,6 +466,26 @@ class TestAnalyzerDriver(unittest.TestCase):
 
         self.assertEqual(data.width, 4)
         self.assertEqual(list(data), [3, 10])
+
+    def test_save_sigrok_session(self):
+        driver, regs = self.make_driver(data_width=4)
+        driver.configure_subsampler(1)
+        driver.data = DumpData(4)
+        driver.data.extend([0b1001, 0b0010])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, "capture.sr")
+
+            driver.save(filename)
+
+            with zipfile.ZipFile(filename) as sr:
+                metadata = sr.read("metadata").decode()
+                self.assertIn("probe1=flag",       metadata)
+                self.assertIn("probe2=state[0]",   metadata)
+                self.assertIn("probe4=state[2]",   metadata)
+                self.assertIn("probe5=scope_clk",  metadata)
+                self.assertIn("probe6=scope_trig", metadata)
+                self.assertIn("samplerate=200.0 MHz", metadata)
 
     def test_upload_decodes_wide_rle_storage_words(self):
         mem_data = [

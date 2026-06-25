@@ -8,6 +8,7 @@ import unittest
 import os
 import random
 import tempfile
+import zipfile
 from math import cos, sin
 
 from litescope.software.dump import *
@@ -186,11 +187,40 @@ class TestDump(unittest.TestCase):
         os.remove(filename)
 
     def test_sigrok(self):
-        filename = "dump.sr"
-        SigrokDump(dump).write(filename)
-        SigrokDump(dump).read(filename)
-        SigrokDump(dump).write(filename)
-        os.remove(filename)
+        capture = Dump()
+        capture.add(DumpVariable("state", 2, [0, 1, 2]))
+        capture.add(DumpVariable("flag", 1, [1, 0, 1]))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd      = os.getcwd()
+            filename = os.path.join(tmpdir, "dump.sr")
+
+            SigrokDump(capture, samplerate=125e6).write(filename)
+            self.assertEqual(os.getcwd(), cwd)
+
+            with zipfile.ZipFile(filename) as sr:
+                self.assertEqual(sorted(sr.namelist()), ["logic-1-1", "metadata", "version"])
+                self.assertEqual(sr.read("version"), b"1")
+
+                metadata = sr.read("metadata").decode()
+                self.assertIn("total probes=8",       metadata)
+                self.assertIn("samplerate=250.0 MHz", metadata)
+                self.assertIn("unitsize=1",           metadata)
+                self.assertIn("probe1=state[0]",      metadata)
+                self.assertIn("probe2=state[1]",      metadata)
+                self.assertIn("probe3=flag",          metadata)
+
+                self.assertEqual(sr.read("logic-1-1"), bytes([0b100, 0b001, 0b110]))
+
+            loaded = SigrokDump()
+            loaded.read(filename)
+            self.assertEqual(os.getcwd(), cwd)
+            self.assertEqual(loaded.samplerate, 250e6)
+            self.assertEqual([(v.name, v.width, v.values) for v in loaded.variables], [
+                ("state[0]", 1, [0, 1, 0]),
+                ("state[1]", 1, [0, 0, 1]),
+                ("flag",     1, [1, 0, 1]),
+            ])
 
     def test_vcd(self):
         filename = "dump.vcd"

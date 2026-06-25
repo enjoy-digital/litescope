@@ -20,14 +20,14 @@ class SigrokDump(Dump):
         self.variables = [] if dump is None else dump.variables
         self.samplerate = 100e6 if samplerate is None else samplerate
 
-    def write_version(self):
-        f = open("version", "w")
+    def write_version(self, path):
+        f = open(os.path.join(path, "version"), "w")
         f.write("1")
         f.close()
 
-    def write_metadata(self, name):
+    def write_metadata(self, path):
         probe_bits = math.ceil(sum(variable.width for variable in self.variables)/8)*8
-        f = open("metadata", "w")
+        f = open(os.path.join(path, "metadata"), "w")
         r = """
 [global]
 sigrok version=0.3.0
@@ -53,7 +53,7 @@ unitsize={}
         f.write(r)
         f.close()
 
-    def write_data(self):
+    def write_data(self, path):
         data_bits = math.ceil(sum(variable.width for variable in self.variables)/8)*8
         data_len = 0
         for variable in self.variables:
@@ -68,18 +68,15 @@ unitsize={}
                 except:
                     pass
             datas.append(data)
-        f = open("logic-1-1", "wb")
+        f = open(os.path.join(path, "logic-1-1"), "wb")
         for data in datas:
             f.write(data.to_bytes(data_bits//8, "little"))
         f.close()
 
     def zip(self, name):
         f = zipfile.ZipFile(name + ".sr", "w")
-        os.chdir(name)
-        f.write("version")
-        f.write("metadata")
-        f.write("logic-1-1")
-        os.chdir("..")
+        for filename in ["version", "metadata", "logic-1-1"]:
+            f.write(os.path.join(name, filename), arcname=filename)
         f.close()
 
     def write(self, filename):
@@ -87,11 +84,9 @@ unitsize={}
         if os.path.exists(name):
             shutil.rmtree(name)
         os.makedirs(name)
-        os.chdir(name)
-        self.write_version()
+        self.write_version(name)
         self.write_metadata(name)
-        self.write_data()
-        os.chdir("..")
+        self.write_data(name)
         self.zip(name)
         shutil.rmtree(name)
 
@@ -101,31 +96,32 @@ unitsize={}
         if os.path.exists(name):
             shutil.rmtree(name)
             os.makedirs(name)
-        for file in z.namelist():
-            z.extract(file, name)
+        else:
+            os.makedirs(name)
+        z.extractall(name)
         f.close()
 
-    def read_metadata(self):
+    def read_metadata(self, path):
         probes = OrderedDict()
-        f = open("metadata", "r")
+        f = open(os.path.join(path, "metadata"), "r")
         for l in f:
-            m = re.search(r"probe([0-9]+) = (\w+)", l, re.I)
+            m = re.search(r"probe([0-9]+)\s*=\s*(.+)", l, re.I)
             if m is not None:
                 index = int(m.group(1))
-                name = m.group(2)
+                name = m.group(2).strip()
                 probes[name] = index
-            m = re.search("samplerate = ([0-9]+) kHz", l, re.I)
+            m = re.search(r"samplerate\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*kHz", l, re.I)
             if m is not None:
-                self.samplerate = int(m.group(1))*1000
-            m = re.search("samplerate = ([0-9]+) MHz", l, re.I)
+                self.samplerate = float(m.group(1))*1000
+            m = re.search(r"samplerate\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*MHz", l, re.I)
             if m is not None:
-                self.samplerate = int(m.group(1))*1000000
+                self.samplerate = float(m.group(1))*1000000
         f.close()
         return probes
 
     def read_data(self, name, nprobes):
         datas = []
-        f = open("logic-1-1", "rb")
+        f = open(os.path.join(name, "logic-1-1"), "rb")
         while True:
             data = f.read(math.ceil(nprobes/8))
             if data == bytes('', "utf-8"):
@@ -139,10 +135,8 @@ unitsize={}
         self.variables = []
         name, ext = os.path.splitext(filename)
         self.unzip(filename, name)
-        os.chdir(name)
-        probes = self.read_metadata()
+        probes = self.read_metadata(name)
         datas = self.read_data(name, len(probes.keys()))
-        os.chdir("..")
         shutil.rmtree(name)
 
         for k, v in probes.items():
