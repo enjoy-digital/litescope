@@ -14,6 +14,7 @@ import sys
 import time
 import threading
 import argparse
+import textwrap
 
 from litex import RemoteClient
 from litescope import LiteScopeAnalyzerDriver
@@ -163,7 +164,23 @@ def run_gui(args):
 # Main ---------------------------------------------------------------------------------------------
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="""LiteScope Client utility""")
+    parser = argparse.ArgumentParser(
+        description     = "LiteScope Client utility",
+        formatter_class = argparse.RawDescriptionHelpFormatter,
+        epilog          = textwrap.dedent("""\
+            Capture controls:
+              --group selects the analyzer capture group. Groups are created by passing
+                      a dict to LiteScopeAnalyzer on the SoC side. Use --list --group=N
+                      to show the signals available in a group.
+              --subsampling keeps one sample every N scope clock cycles. 1 means no
+                      subsampling. The effective dump sample rate is samplerate / N.
+              --offset selects how many pre-trigger samples are kept in the dump, so
+                      scope_trig is placed at this sample index.
+              --length selects the number of stored samples/words to read for this
+                      capture. It must be <= the SoC-side LiteScopeAnalyzer depth. With
+                      RLE enabled, this is the encoded storage-word count, not the final
+                      decoded logical sample count.
+        """))
     parser.add_argument("-r", "--rising-edge",   action="append",          help="Add rising edge trigger.")
     parser.add_argument("-f", "--falling-edge",  action="append",          help="Add falling edge trigger.")
     parser.add_argument("-v", "--value-trigger", action="append", nargs=2, help="Add conditional trigger with given value.",
@@ -173,11 +190,11 @@ def parse_args():
     parser.add_argument("--port",                default="1234",           help="Host bind port.")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file.")
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
-    parser.add_argument("--group",               default=0, type=int,      help="Capture Group.")
-    parser.add_argument("--subsampling",         default=1, type=int,      help="Capture Subsampling.")
+    parser.add_argument("--group",               default=0, type=int,      help="Capture group to use from analyzer.csv.")
+    parser.add_argument("--subsampling",         default=1, type=int,      help="Keep one sample every N scope clock cycles.")
     parser.add_argument("--rle",                 action="store_true",      help="Enable analyzer run-length encoding.")
-    parser.add_argument("--offset",              default="32",             help="Capture Offset.")
-    parser.add_argument("--length",              default=None,             help="Capture Length.")
+    parser.add_argument("--offset",              default="32",             help="Pre-trigger sample count.")
+    parser.add_argument("--length",              default=None,             help="Stored sample/word count to capture; default is analyzer depth.")
     parser.add_argument("--dump",                default="dump.vcd",       help="Capture Filename.")
     parser.add_argument("--gui",                 action="store_true",      help="Run Gui.")
     args = parser.parse_args()

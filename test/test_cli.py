@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 import os
+import io
 import sys
 import tempfile
 import unittest
@@ -97,6 +98,24 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.subsampling, 4)
         self.assertEqual(args.offset, "0x10")
         self.assertEqual(args.length, "0x20")
+
+    def test_help_describes_capture_controls(self):
+        argv = [
+            "litescope_cli",
+            "--help",
+        ]
+        stdout = io.StringIO()
+        with mock.patch.object(sys, "argv", argv):
+            with mock.patch("sys.stdout", stdout):
+                with self.assertRaises(SystemExit) as cm:
+                    litescope_cli.parse_args()
+
+        self.assertEqual(cm.exception.code, 0)
+        help_text = stdout.getvalue()
+        self.assertIn("--group selects the analyzer capture group", help_text)
+        self.assertIn("--subsampling keeps one sample every N scope clock cycles", help_text)
+        self.assertIn("--offset selects how many pre-trigger samples", help_text)
+        self.assertIn("LiteScopeAnalyzer depth", help_text)
 
     def test_get_signals_filters_group(self):
         with tempfile.TemporaryDirectory() as tmpdir:
