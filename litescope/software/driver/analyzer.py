@@ -72,6 +72,8 @@ class LiteScopeAnalyzerDriver:
         self.length = None
 
         # Disable trigger and storage
+        if hasattr(self, "trigger_mem_reset"):
+            self.trigger_mem_reset.write(1)
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
         if hasattr(self, "rle_enable"):
@@ -88,7 +90,8 @@ class LiteScopeAnalyzerDriver:
         self.storage_width     = getattr(self, "storage_width", self.data_width)
         self.with_rle          = getattr(self, "with_rle", 0)
         self.rle_length        = getattr(self, "rle_length", 0)
-        self.subsampler_width = getattr(self, "subsampler_width", 16)
+        self.trigger_timeout_width = getattr(self, "trigger_timeout_width", 32)
+        self.subsampler_width      = getattr(self, "subsampler_width", 16)
 
     def get_layouts(self):
         self.layouts = {}
@@ -126,9 +129,14 @@ class LiteScopeAnalyzerDriver:
         self.group = value
         self.mux_value.write(value)
 
-    def add_trigger(self, value=0, mask=0, cond=None):
+    def add_trigger(self, value=0, mask=0, cond=None, timeout=0):
         if self.trigger_mem_full.read():
             raise ValueError("Trigger memory full, too much conditions")
+        timeout = 0 if timeout is None else timeout
+        if timeout < 0:
+            raise ValueError("Trigger timeout must be >= 0")
+        if timeout >= 2**self.trigger_timeout_width:
+            raise ValueError("Trigger timeout must be < 2**{:d}".format(self.trigger_timeout_width))
         if cond is not None:
             for k, v in cond.items():
                 # Check for binary/hexa expressions
@@ -153,6 +161,8 @@ class LiteScopeAnalyzerDriver:
                     mask  |= getattr(self, k + "_m")
         self.trigger_mem_mask.write(mask)
         self.trigger_mem_value.write(value)
+        if hasattr(self, "trigger_mem_timeout"):
+            self.trigger_mem_timeout.write(timeout)
         self.trigger_mem_write.write(1)
 
     def add_rising_edge_trigger(self, name):
@@ -163,8 +173,8 @@ class LiteScopeAnalyzerDriver:
         self.add_trigger(getattr(self, name + "_o")*1, getattr(self, name + "_m"))
         self.add_trigger(getattr(self, name + "_o")*0, getattr(self, name + "_m"))
 
-    def configure_trigger(self, value=0, mask=0, cond=None):
-        self.add_trigger(value, mask, cond)
+    def configure_trigger(self, value=0, mask=0, cond=None, timeout=0):
+        self.add_trigger(value, mask, cond, timeout=timeout)
 
     def configure_subsampler(self, value):
         if value < 1:
@@ -203,6 +213,8 @@ class LiteScopeAnalyzerDriver:
         self.offset = 0
         self.length = None
         self.rle_enabled = False
+        if hasattr(self, "trigger_mem_reset"):
+            self.trigger_mem_reset.write(1)
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
         if hasattr(self, "rle_enable"):
