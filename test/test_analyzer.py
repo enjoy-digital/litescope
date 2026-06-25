@@ -333,3 +333,28 @@ class TestAnalyzer(unittest.TestCase):
             "signal,0,signal_a,3",
             "signal,1,signal_b,5",
         ])
+
+    def test_export_csv_with_fsm_enum(self):
+        fsm = FSM(reset_state="IDLE")
+        fsm.act("IDLE", NextState("RUN"))
+        fsm.act("RUN",  NextState("DONE"))
+        fsm.act("DONE", NextState("IDLE"))
+
+        analyzer = LiteScopeAnalyzer(fsm, depth=32, csr_csv=None)
+        state    = analyzer.groups[0][0]
+
+        class VNS:
+            def get_name(self, signal):
+                return {
+                    state: "fsm_state",
+                }[signal]
+
+        with tempfile.NamedTemporaryFile() as f:
+            analyzer.export_csv(VNS(), f.name)
+            with open(f.name) as csv_file:
+                lines = csv_file.read().splitlines()
+
+        self.assertIn("signal,0,fsm_state,2", lines)
+        self.assertIn("enum,0,fsm_state,0,IDLE", lines)
+        self.assertIn("enum,0,fsm_state,1,RUN",  lines)
+        self.assertIn("enum,0,fsm_state,2,DONE", lines)

@@ -80,7 +80,9 @@ class LiteScopeAnalyzerDriver:
     def get_config(self):
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
         for item in csv_reader:
-            t, g, n, v = item
+            if len(item) < 4:
+                continue
+            t, g, n, v = item[:4]
             if t == "config":
                 setattr(self, n, int(v))
         self.storage_width     = getattr(self, "storage_width", self.data_width)
@@ -90,14 +92,19 @@ class LiteScopeAnalyzerDriver:
 
     def get_layouts(self):
         self.layouts = {}
+        self.enums   = {}
         csv_reader = csv.reader(open(self.config_csv), delimiter=',', quotechar='#')
         for item in csv_reader:
-            t, g, n, v = item
+            if len(item) < 4:
+                continue
+            t, g, n, v = item[:4]
             if t == "signal":
                 try:
                     self.layouts[int(g)].append((n, int(v)))
                 except:
                     self.layouts[int(g)] = [(n, int(v))]
+            if t == "enum" and len(item) >= 5:
+                self.enums.setdefault((int(g), n), {})[int(v, 0)] = item[4]
 
     def build(self):
         for key, value in self.regs.d.items():
@@ -279,7 +286,31 @@ class LiteScopeAnalyzerDriver:
             dump.add_from_layout_flatten(self.layouts[self.group], self.data)
         dump.add_scope_clk()
         dump.add_scope_trig(self.offset)
-        dump.write(filename)
+
+        if ext == ".vcd" and not flatten:
+            gtkw_filters = self.write_gtkw_filters(filename)
+            if gtkw_filters:
+                dump.write(filename, gtkw_filters=gtkw_filters)
+            else:
+                dump.write(filename)
+        else:
+            dump.write(filename)
+
+    def write_gtkw_filters(self, filename):
+        gtkw_filters = {}
+        dirname      = os.path.dirname(filename)
+        basename     = os.path.splitext(os.path.basename(filename))[0]
+        for name, width in self.layouts[self.group]:
+            enum = self.enums.get((self.group, name), None)
+            if enum is None:
+                continue
+            filter_name = re.sub(r"[^A-Za-z0-9_.-]", "_", f"{basename}_{name}.txt")
+            filter_path = os.path.join(dirname, filter_name)
+            with open(filter_path, "w") as f:
+                for value, label in sorted(enum.items()):
+                    f.write(f"{value} {label}\n")
+            gtkw_filters[name] = filter_path
+        return gtkw_filters
 
     def get_instant_value(self, group, name):
         self.data = DumpData(self.data_width)

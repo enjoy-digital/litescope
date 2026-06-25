@@ -41,7 +41,7 @@ class FakeRegs:
 
 def write_config(filename, data_width=8, depth=16, samplerate=100000000,
                  storage_width=None, subsampler_width=None,
-                 with_rle=None, rle_length=None):
+                 with_rle=None, rle_length=None, enums=None):
     with open(filename, "w") as f:
         f.write(f"config,None,data_width,{data_width}\n")
         if storage_width is not None:
@@ -57,6 +57,9 @@ def write_config(filename, data_width=8, depth=16, samplerate=100000000,
         f.write("signal,0,flag,1\n")
         f.write("signal,0,state,3\n")
         f.write(f"signal,1,wide,{data_width}\n")
+        for (group, name), enum in (enums or {}).items():
+            for value, label in enum.items():
+                f.write(f"enum,{group},{name},{value},{label}\n")
 
 
 def make_regs(name="analyzer", mem_level=0, mem_data=None, with_rle=False):
@@ -120,7 +123,7 @@ def pack_storage_words(words, storage_width):
 class TestAnalyzerDriver(unittest.TestCase):
     def make_driver(self, data_width=8, depth=16, mem_level=0, mem_data=None,
                     storage_width=None, subsampler_width=None,
-                    with_rle=False, rle_length=256):
+                    with_rle=False, rle_length=256, enums=None):
         self.tmpdir = tempfile.TemporaryDirectory()
         config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
         write_config(config_csv,
@@ -129,7 +132,8 @@ class TestAnalyzerDriver(unittest.TestCase):
             storage_width    = storage_width,
             subsampler_width = subsampler_width,
             with_rle         = with_rle if with_rle else None,
-            rle_length       = rle_length if with_rle else None)
+            rle_length       = rle_length if with_rle else None,
+            enums            = enums)
         regs = make_regs(mem_level=mem_level, mem_data=mem_data, with_rle=with_rle)
         driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
         return driver, regs
@@ -486,6 +490,42 @@ class TestAnalyzerDriver(unittest.TestCase):
                 self.assertIn("probe5=scope_clk",  metadata)
                 self.assertIn("probe6=scope_trig", metadata)
                 self.assertIn("samplerate=200.0 MHz", metadata)
+
+    def test_save_vcd_generates_enum_gtkw_filter(self):
+        driver, regs = self.make_driver(
+            data_width = 4,
+            enums      = {(0, "state") : {
+                0: "IDLE",
+                1: "RUN",
+                2: "DONE",
+            }},
+        )
+        driver.configure_subsampler(1)
+        driver.data = DumpData(4)
+        driver.data.extend([0b0000, 0b0100])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, "capture.vcd")
+
+            driver.save(filename)
+
+            gtkw_filename   = os.path.join(tmpdir, "capture.gtkw")
+            filter_filename = os.path.join(tmpdir, "capture_state.txt")
+            self.assertTrue(os.path.exists(gtkw_filename))
+            self.assertTrue(os.path.exists(filter_filename))
+
+            with open(filter_filename) as f:
+                self.assertEqual(f.read().splitlines(), [
+                    "0 IDLE",
+                    "1 RUN",
+                    "2 DONE",
+                ])
+
+            with open(gtkw_filename) as f:
+                gtkw = f.read()
+
+            self.assertIn("^1 {}".format(filter_filename), gtkw)
+            self.assertIn("top.state[2:0]", gtkw)
 
     def test_upload_decodes_wide_rle_storage_words(self):
         mem_data = [

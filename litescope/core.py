@@ -473,7 +473,10 @@ class LiteScopeAnalyzer(LiteXModule):
         r += format_line("config", "None", "rle_length", str(self.rle_length))
         for i, signals in self.groups.items():
             for s in signals:
-                r += format_line("signal", str(i), vns.get_name(s), str(len(s)))
+                name = vns.get_name(s)
+                r += format_line("signal", str(i), name, str(len(s)))
+                for value, label in sorted(getattr(s, "_enumeration", {}).items()):
+                    r += format_line("enum", str(i), name, str(value), str(label))
         write_to_file(filename, r)
 
     def do_exit(self, vns):
