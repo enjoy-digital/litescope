@@ -40,8 +40,7 @@ class FakeRegs:
 
 
 def write_config(filename, data_width=8, depth=16, samplerate=100000000,
-                 storage_width=None, trigger_timeout_width=None,
-                 subsampler_width=None,
+                 storage_width=None, subsampler_width=None,
                  with_rle=None, rle_length=None, enums=None):
     with open(filename, "w") as f:
         f.write(f"config,None,data_width,{data_width}\n")
@@ -49,8 +48,6 @@ def write_config(filename, data_width=8, depth=16, samplerate=100000000,
             f.write(f"config,None,storage_width,{storage_width}\n")
         f.write(f"config,None,depth,{depth}\n")
         f.write(f"config,None,samplerate,{samplerate}\n")
-        if trigger_timeout_width is not None:
-            f.write(f"config,None,trigger_timeout_width,{trigger_timeout_width}\n")
         if subsampler_width is not None:
             f.write(f"config,None,subsampler_width,{subsampler_width}\n")
         if with_rle is not None:
@@ -69,10 +66,8 @@ def make_regs(name="analyzer", mem_level=0, mem_data=None, with_rle=False):
     regs = {
         "mux_value":             FakeReg(),
         "trigger_mem_full":      FakeReg(),
-        "trigger_mem_reset":     FakeReg(),
         "trigger_mem_mask":      FakeReg(),
         "trigger_mem_value":     FakeReg(),
-        "trigger_mem_timeout":   FakeReg(),
         "trigger_mem_write":     FakeReg(),
         "trigger_enable":        FakeReg(),
         "subsampler_value":      FakeReg(),
@@ -127,20 +122,18 @@ def pack_storage_words(words, storage_width):
 
 class TestAnalyzerDriver(unittest.TestCase):
     def make_driver(self, data_width=8, depth=16, mem_level=0, mem_data=None,
-                    storage_width=None, trigger_timeout_width=None,
-                    subsampler_width=None,
+                    storage_width=None, subsampler_width=None,
                     with_rle=False, rle_length=256, enums=None):
         self.tmpdir = tempfile.TemporaryDirectory()
         config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
         write_config(config_csv,
-            data_width            = data_width,
-            depth                 = depth,
-            storage_width         = storage_width,
-            trigger_timeout_width = trigger_timeout_width,
-            subsampler_width      = subsampler_width,
-            with_rle              = with_rle if with_rle else None,
-            rle_length            = rle_length if with_rle else None,
-            enums                 = enums)
+            data_width       = data_width,
+            depth            = depth,
+            storage_width    = storage_width,
+            subsampler_width = subsampler_width,
+            with_rle         = with_rle if with_rle else None,
+            rle_length       = rle_length if with_rle else None,
+            enums            = enums)
         regs = make_regs(mem_level=mem_level, mem_data=mem_data, with_rle=with_rle)
         driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
         return driver, regs
@@ -160,7 +153,6 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(driver.storage_width, 8)
         self.assertEqual(driver.depth, 16)
         self.assertEqual(driver.samplerate, 100000000)
-        self.assertEqual(driver.trigger_timeout_width, 32)
         self.assertEqual(driver.subsampler_width, 16)
         self.assertEqual(driver.with_rle, 0)
         self.assertEqual(driver.layouts, {
@@ -173,7 +165,6 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(driver.state_m, 0xe)
         self.assertEqual(driver.wide_o,  0x1)
         self.assertEqual(driver.wide_m,  0xff)
-        self.assertEqual(regs.d["analyzer_trigger_mem_reset"].writes, [1])
         self.assertEqual(regs.d["analyzer_trigger_enable"].writes, [0])
         self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
 
@@ -204,19 +195,17 @@ class TestAnalyzerDriver(unittest.TestCase):
 
         self.assertFalse(driver.rle_enabled)
         self.assertEqual(regs.d["analyzer_rle_enable"].writes, [1, 0])
-        self.assertEqual(regs.d["analyzer_trigger_mem_reset"].writes, [1])
         self.assertEqual(regs.d["analyzer_trigger_enable"].writes, [0])
         self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
 
     def test_conditional_trigger_parsing(self):
-        driver, regs = self.make_driver(trigger_timeout_width=8)
+        driver, regs = self.make_driver()
         self.clear_writes(regs)
 
-        driver.add_trigger(cond={"flag": "1", "state": "0b1x0"}, timeout=5)
+        driver.add_trigger(cond={"flag": "1", "state": "0b1x0"})
 
         self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0x9])
         self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xb])
-        self.assertEqual(regs.d["analyzer_trigger_mem_timeout"].writes, [5])
         self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1])
 
         self.clear_writes(regs)
@@ -224,16 +213,7 @@ class TestAnalyzerDriver(unittest.TestCase):
 
         self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0xa0])
         self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xf0])
-        self.assertEqual(regs.d["analyzer_trigger_mem_timeout"].writes, [0])
         self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1])
-
-    def test_add_trigger_rejects_invalid_timeout(self):
-        driver, regs = self.make_driver(trigger_timeout_width=4)
-
-        with self.assertRaises(ValueError):
-            driver.add_trigger(value=1, mask=1, timeout=-1)
-        with self.assertRaises(ValueError):
-            driver.add_trigger(value=1, mask=1, timeout=16)
 
     def test_edge_trigger_helpers(self):
         driver, regs = self.make_driver()

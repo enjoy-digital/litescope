@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: BSD-2-Clause
 
 from migen import *
-from migen.genlib.cdc import MultiReg
+from migen.genlib.cdc import MultiReg, PulseSynchronizer
 
 from litex.gen import *
 from litex.gen.genlib.misc import WaitTimer
@@ -42,120 +42,58 @@ def core_layout(data_width):
 # LiteScope Analyzer Trigger -----------------------------------------------------------------------
 
 class _Trigger(LiteXModule):
-    def __init__(self, data_width, depth=16, timeout_width=32):
+    def __init__(self, data_width, depth=16):
         self.sink   = sink   = stream.Endpoint(core_layout(data_width))
         self.source = source = stream.Endpoint(core_layout(data_width))
 
         self.enable = CSRStorage()
         self.done   = CSRStatus()
 
-        self.mem_write   = CSR()
-        self.mem_reset   = CSR()
-        self.mem_mask    = CSRStorage(data_width)
-        self.mem_value   = CSRStorage(data_width)
-        self.mem_timeout = CSRStorage(timeout_width)
-        self.mem_full    = CSRStatus()
+        self.mem_write = CSR()
+        self.mem_mask  = CSRStorage(data_width)
+        self.mem_value = CSRStorage(data_width)
+        self.mem_full  = CSRStatus()
 
         # # #
 
         # Control re-synchronization.
         enable   = Signal()
+        enable_d = Signal()
         self.specials += MultiReg(self.enable.storage, enable, "scope")
+        self.sync.scope += enable_d.eq(enable)
 
         # Status re-synchronization.
         done = Signal()
         self.specials += MultiReg(done, self.done.status)
 
         # Memory and configuration.
-        entry_width = 2*data_width + timeout_width
-        mem         = Memory(entry_width, depth)
-        self.specials += mem
-
-        wrport = mem.get_port(write_capable=True, clock_domain="sys")
-        rdport = mem.get_port(async_read=True, clock_domain="scope")
-        self.specials += wrport, rdport
-
-        write_count = Signal(max=depth + 1)
-        write_ptr   = Signal(max=depth)
-        write       = Signal()
+        mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth)
+        mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
+        self.submodules += mem
         self.comb += [
-            write.eq(self.mem_write.wr_stb & (write_count != depth)),
-            wrport.we.eq(write),
-            wrport.adr.eq(write_ptr),
-            wrport.dat_w.eq(Cat(
-                self.mem_mask.storage,
-                self.mem_value.storage,
-                self.mem_timeout.storage)),
-            self.mem_full.status.eq(write_count == depth),
-        ]
-        self.sync += [
-            If(self.mem_reset.wr_stb,
-                write_count.eq(0),
-                write_ptr.eq(0)
-            ).Elif(write,
-                write_count.eq(write_count + 1),
-                write_ptr.eq(write_ptr + 1)
-            )
+            mem.sink.valid.eq(self.mem_write.wr_stb),
+            mem.sink.mask.eq(self.mem_mask.storage),
+            mem.sink.value.eq(self.mem_value.storage),
+            self.mem_full.status.eq(~mem.sink.ready)
         ]
 
-        trigger_count = Signal(max=depth + 1)
-        self.specials += MultiReg(write_count, trigger_count, "scope")
-
-        # Trigger sequence.
-        trigger_index = Signal(max=depth)
-        mask          = Signal(data_width)
-        value         = Signal(data_width)
-        timeout       = Signal(timeout_width)
-        timeout_count = Signal(timeout_width)
-        entry_valid   = Signal()
-        hit           = Signal()
-        last          = Signal()
-        final_hit     = Signal()
-        timeout_hit   = Signal()
-        sample        = Signal()
-
+        # Hit and memory read/flush.
+        hit   = Signal()
+        flush = WaitTimer(2*depth)
+        flush = ClockDomainsRenamer("scope")(flush)
+        self.submodules += flush
         self.comb += [
-            rdport.adr.eq(trigger_index),
-            mask.eq(rdport.dat_r[:data_width]),
-            value.eq(rdport.dat_r[data_width:2*data_width]),
-            timeout.eq(rdport.dat_r[2*data_width:]),
-            entry_valid.eq(trigger_index < trigger_count),
-            hit.eq(entry_valid & ((sink.data & mask) == (value & mask))),
-            last.eq(trigger_index == (trigger_count - 1)),
-            final_hit.eq(enable & sink.valid & hit & last),
-            timeout_hit.eq(entry_valid & (timeout != 0) & (timeout_count == (timeout - 1))),
-            sample.eq(enable & sink.valid & source.ready),
-        ]
-
-        self.sync.scope += [
-            If(~enable,
-                trigger_index.eq(0),
-                timeout_count.eq(0),
-                done.eq(0)
-            ).Elif(done,
-                timeout_count.eq(0)
-            ).Elif(sample & entry_valid,
-                If(hit,
-                    timeout_count.eq(0),
-                    If(last,
-                        trigger_index.eq(0),
-                        done.eq(1)
-                    ).Else(
-                        trigger_index.eq(trigger_index + 1)
-                    )
-                ).Elif(timeout_hit,
-                    trigger_index.eq(0),
-                    timeout_count.eq(0)
-                ).Elif(timeout != 0,
-                    timeout_count.eq(timeout_count + 1)
-                )
-            )
+            flush.wait.eq(~(~enable & enable_d)), # flush when disabling
+            hit.eq((sink.data & mem.source.mask) == (mem.source.value & mem.source.mask)),
+            mem.source.ready.eq((enable & hit) | ~flush.done),
         ]
 
         # Output.
         self.comb += [
             sink.connect(source),
-            source.hit.eq((trigger_count == 0) | done | final_hit),
+            # Done when all triggers have been consumed.
+            done.eq(~mem.source.valid),
+            source.hit.eq(done)
         ]
 
 # LiteScope Analyzer SubSampler --------------------------------------------------------------------
@@ -427,20 +365,18 @@ class _Storage(LiteXModule):
 
 class LiteScopeAnalyzer(LiteXModule):
     def __init__(self, groups, depth,
-        samplerate             = 1e12,
-        clock_domain           = "sys",
-        trigger_depth          = 16,
-        trigger_timeout_width  = 32,
-        subsampler_width       = 16,
-        register               = False,
-        with_rle               = False,
-        rle_length             = 256,
-        csr_csv                = "analyzer.csv",
+        samplerate       = 1e12,
+        clock_domain     = "sys",
+        trigger_depth    = 16,
+        subsampler_width = 16,
+        register         = False,
+        with_rle         = False,
+        rle_length       = 256,
+        csr_csv          = "analyzer.csv",
     ):
         self.groups           = groups = self.format_groups(groups)
         self.depth            = depth
         self.samplerate       = int(samplerate)
-        self.trigger_timeout_width = trigger_timeout_width
         self.subsampler_width = subsampler_width
 
         self.data_width = data_width = max([sum([len(s) for s in g]) for g in groups.values()])
@@ -477,7 +413,7 @@ class LiteScopeAnalyzer(LiteXModule):
 
         # Frontend.
         # ---------
-        self.trigger    = _Trigger(data_width, depth=trigger_depth, timeout_width=trigger_timeout_width)
+        self.trigger    = _Trigger(data_width, depth=trigger_depth)
         self.subsampler = _SubSampler(data_width, value_width=subsampler_width)
 
         # Storage.
@@ -532,7 +468,6 @@ class LiteScopeAnalyzer(LiteXModule):
         r += format_line("config", "None", "storage_width", str(self.storage_width))
         r += format_line("config", "None", "depth", str(self.depth))
         r += format_line("config", "None", "samplerate", str(self.samplerate))
-        r += format_line("config", "None", "trigger_timeout_width", str(self.trigger_timeout_width))
         r += format_line("config", "None", "subsampler_width", str(self.subsampler_width))
         r += format_line("config", "None", "with_rle", str(int(self.with_rle)))
         r += format_line("config", "None", "rle_length", str(self.rle_length))
