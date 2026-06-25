@@ -7,6 +7,7 @@
 import unittest
 import os
 import random
+import tempfile
 from math import cos, sin
 
 from litescope.software.dump import *
@@ -195,3 +196,31 @@ class TestDump(unittest.TestCase):
         filename = "dump.vcd"
         VCDDump(dump).write(filename)
         os.remove(filename)
+
+    def test_vcd_gtkw(self):
+        capture = Dump()
+        capture.add(DumpVariable("state", 2, [0, 1, 2]))
+        capture.add(DumpVariable("flag", 1, [0, 1, 0]))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            vcd_filename    = os.path.join(tmpdir, "dump.vcd")
+            gtkw_filename   = os.path.join(tmpdir, "dump.gtkw")
+            filter_filename = os.path.join(tmpdir, "filter_state.txt")
+
+            with open(filter_filename, "w") as f:
+                f.write("0 IDLE\n")
+                f.write("1 RUN\n")
+                f.write("2 DONE\n")
+
+            VCDDump(capture).write(vcd_filename,
+                gtkw_filename = gtkw_filename,
+                gtkw_filters  = {"state": filter_filename},
+            )
+
+            with open(gtkw_filename) as f:
+                gtkw = f.read()
+
+            self.assertIn("[dumpfile] \"{}\"".format(vcd_filename), gtkw)
+            self.assertIn("^1 {}".format(filter_filename), gtkw)
+            self.assertIn("top.state[1:0]", gtkw)
+            self.assertIn("top.flag",       gtkw)
