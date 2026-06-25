@@ -10,6 +10,7 @@ import tempfile
 from migen import *
 
 from litescope import LiteScopeAnalyzer
+from litescope.core import _Trigger
 from litescope.software.dump.common import DumpData
 
 
@@ -29,7 +30,62 @@ def read_capture_words(analyzer, length):
     return data
 
 
+def configure_trigger_entry(trigger, value, mask, timeout=0):
+    yield from trigger.mem_value.write(value)
+    yield from trigger.mem_mask.write(mask)
+    yield from trigger.mem_timeout.write(timeout)
+    yield from trigger.mem_write.write(1)
+
+
 class TestAnalyzer(unittest.TestCase):
+    def run_trigger_sequence(self, entries, samples):
+        def generator(dut):
+            dut.hits = []
+            for value, mask, timeout in entries:
+                yield from configure_trigger_entry(dut.trigger, value, mask, timeout)
+            for i in range(16):
+                yield
+
+            yield from dut.trigger.enable.write(1)
+            yield dut.trigger.sink.valid.eq(1)
+            yield dut.trigger.source.ready.eq(1)
+            yield
+
+            for sample in samples:
+                yield dut.trigger.sink.data.eq(sample)
+                yield
+                dut.hits.append((yield dut.trigger.source.hit))
+
+        class DUT(Module):
+            def __init__(self):
+                self.submodules.trigger = _Trigger(8, depth=4, timeout_width=4)
+
+        dut = DUT()
+        generators = {"sys" : [generator(dut)]}
+        clocks     = {"sys": 10, "scope": 10}
+        run_simulation(dut, generators, clocks)
+        return dut.hits
+
+    def test_trigger_timeout_restarts_sequence(self):
+        hits = self.run_trigger_sequence(
+            entries = [
+                (1, 0xff, 0),
+                (2, 0xff, 3),
+            ],
+            samples = [1, 0, 0, 0, 2, 1, 0, 2],
+        )
+        self.assertEqual(hits, [0, 0, 0, 0, 0, 0, 0, 1])
+
+    def test_trigger_zero_timeout_waits_indefinitely(self):
+        hits = self.run_trigger_sequence(
+            entries = [
+                (1, 0xff, 0),
+                (2, 0xff, 0),
+            ],
+            samples = [1, 0, 0, 0, 0, 2],
+        )
+        self.assertEqual(hits, [0, 0, 0, 0, 0, 1])
+
     def test_analyzer(self):
         def generator(dut):
             dut.data = []
@@ -45,6 +101,7 @@ class TestAnalyzer(unittest.TestCase):
             yield from dut.analyzer.storage.length.write(256)
             yield from dut.analyzer.storage.offset.write(8)
             yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
             yield
             for i in range(16):
                 yield
@@ -71,7 +128,7 @@ class TestAnalyzer(unittest.TestCase):
             yield from dut.analyzer.mux.value.write(1)
 
             # Trigger on the second group and verify captured data comes from it.
-            yield from dut.analyzer.trigger.mem_value.write(0xb0)
+            yield from dut.analyzer.trigger.mem_value.write(0xb2)
             yield from dut.analyzer.trigger.mem_mask.write(0xff)
             yield from dut.analyzer.trigger.mem_write.write(1)
 
@@ -105,7 +162,7 @@ class TestAnalyzer(unittest.TestCase):
         generators = {"sys" : [generator(dut)]}
         clocks     = {"sys": 10, "scope": 10}
         run_simulation(dut, generators, clocks)
-        self.assertEqual(dut.data, [132 + 3*i for i in range(len(dut.data))])
+        self.assertEqual(dut.data, [175 + 3*i for i in range(len(dut.data))])
 
     def test_analyzer_raw_msb_data_without_rle(self):
         def generator(dut):
@@ -327,6 +384,7 @@ class TestAnalyzer(unittest.TestCase):
             "config,None,storage_width,5",
             "config,None,depth,32",
             "config,None,samplerate,125000000",
+            "config,None,trigger_timeout_width,32",
             "config,None,subsampler_width,20",
             "config,None,with_rle,0",
             "config,None,rle_length,256",
