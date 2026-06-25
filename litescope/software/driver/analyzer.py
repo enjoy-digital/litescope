@@ -281,7 +281,12 @@ class LiteScopeAnalyzerDriver:
         else:
             raise NotImplementedError
         if not flatten:
-            dump.add_from_layout(self.layouts[self.group], self.data)
+            enums = {
+                name: self.enums[(self.group, name)]
+                for name, width in self.layouts[self.group]
+                if (self.group, name) in self.enums
+            }
+            dump.add_from_layout(self.layouts[self.group], self.data, enums=enums)
         else:
             dump.add_from_layout_flatten(self.layouts[self.group], self.data)
         dump.add_scope_clk()

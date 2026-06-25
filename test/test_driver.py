@@ -502,7 +502,7 @@ class TestAnalyzerDriver(unittest.TestCase):
         )
         driver.configure_subsampler(1)
         driver.data = DumpData(4)
-        driver.data.extend([0b0000, 0b0100])
+        driver.data.extend([0b0000, 0b0010, 0b0100])
 
         with tempfile.TemporaryDirectory() as tmpdir:
             filename = os.path.join(tmpdir, "capture.vcd")
@@ -526,6 +526,16 @@ class TestAnalyzerDriver(unittest.TestCase):
 
             self.assertIn("^1 {}".format(filter_filename), gtkw)
             self.assertIn("top.state[2:0]", gtkw)
+            self.assertIn("top.state_text[31:0]", gtkw)
+
+            with open(filename) as f:
+                vcd = f.read()
+
+            self.assertIn("$var wire 32", vcd)
+            self.assertIn("state_text", vcd)
+            self.assertIn("b01001001010001000100110001000101", vcd) # IDLE.
+            self.assertIn("b01010010010101010100111000100000", vcd) # RUN.
+            self.assertIn("b01000100010011110100111001000101", vcd) # DONE.
 
     def test_upload_decodes_wide_rle_storage_words(self):
         mem_data = [

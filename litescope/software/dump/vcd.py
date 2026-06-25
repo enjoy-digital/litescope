@@ -62,6 +62,8 @@ class VCDDump(Dump):
                 if val != v.current_value:
                     v.current_value = val
                     c += f"b{dec2bin(val, v.width)} {v.code}\n"
+                    if self._has_enum(v):
+                        c += f"b{self._enum_text_bits(v, val)} {v.text_code}\n"
             except:
                 pass
         if c != "":
@@ -99,6 +101,14 @@ class VCDDump(Dump):
             r += " "
             r += v.name
             r += " $end\n"
+            if self._has_enum(v):
+                r += "$var wire "
+                r += str(self._enum_text_width(v))
+                r += " "
+                r += v.text_code
+                r += " "
+                r += self._enum_text_name(v)
+                r += " $end\n"
         r += "$upscope "
         r += " $end\n"
         r += "$enddefinitions "
@@ -114,6 +124,12 @@ class VCDDump(Dump):
             r += " "
             r += v.code
             r += "\n"
+            if self._has_enum(v):
+                r += "b"
+                r += dec2bin(v.current_value, self._enum_text_width(v))
+                r += " "
+                r += v.text_code
+                r += "\n"
         r += "$end\n"
         return r
 
@@ -129,6 +145,27 @@ class VCDDump(Dump):
             return "top.{}".format(variable.name)
         return "top.{}[{}:0]".format(variable.name, variable.width - 1)
 
+    def _gtkw_text_variable_name(self, variable):
+        return "top.{}[{}:0]".format(self._enum_text_name(variable), self._enum_text_width(variable) - 1)
+
+    def _has_enum(self, variable):
+        return len(getattr(variable, "enum", {})) != 0
+
+    def _enum_text_name(self, variable):
+        return "{}_text".format(variable.name)
+
+    def _enum_text_width(self, variable):
+        labels = [str(label) for label in variable.enum.values()]
+        labels.append(str(2**variable.width - 1))
+        return max(1, max(len(label) for label in labels))*8
+
+    def _enum_text_bits(self, variable, value):
+        width = self._enum_text_width(variable)//8
+        label = str(variable.enum.get(value, value))
+        data  = label.encode("ascii", errors="replace")
+        data  = data[:width].ljust(width, b" ")
+        return "".join("{:08b}".format(c) for c in data)
+
     def generate_gtkw(self, filename, filters=None):
         filters = {} if filters is None else filters
         r = ""
@@ -140,6 +177,9 @@ class VCDDump(Dump):
             if filter_filename is not None:
                 r += "^1 {}\n".format(filter_filename)
             r += "{}\n".format(self._gtkw_variable_name(v))
+            if self._has_enum(v):
+                r += "@28\n"
+                r += "{}\n".format(self._gtkw_text_variable_name(v))
         return r
 
     def __repr__(self):
@@ -150,6 +190,8 @@ class VCDDump(Dump):
         codegen = vcd_codes()
         for v in self.variables:
             v.code = next(codegen)
+            if self._has_enum(v):
+                v.text_code = next(codegen)
 
     def write_gtkw(self, filename, gtkw_filename=None, filters=None):
         if gtkw_filename is None:

@@ -229,7 +229,11 @@ class TestDump(unittest.TestCase):
 
     def test_vcd_gtkw(self):
         capture = Dump()
-        capture.add(DumpVariable("state", 2, [0, 1, 2]))
+        capture.add(DumpVariable("state", 2, [0, 1, 2], enum={
+            0: "IDLE",
+            1: "RUN",
+            2: "DONE",
+        }))
         capture.add(DumpVariable("flag", 1, [0, 1, 0]))
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -253,4 +257,14 @@ class TestDump(unittest.TestCase):
             self.assertIn("[dumpfile] \"{}\"".format(vcd_filename), gtkw)
             self.assertIn("^1 {}".format(filter_filename), gtkw)
             self.assertIn("top.state[1:0]", gtkw)
+            self.assertIn("top.state_text[31:0]", gtkw)
             self.assertIn("top.flag",       gtkw)
+
+            with open(vcd_filename) as f:
+                vcd = f.read()
+
+            self.assertIn("$var wire 32", vcd)
+            self.assertIn("state_text", vcd)
+            self.assertIn("b01001001010001000100110001000101", vcd) # IDLE.
+            self.assertIn("b01010010010101010100111000100000", vcd) # RUN.
+            self.assertIn("b01000100010011110100111001000101", vcd) # DONE.

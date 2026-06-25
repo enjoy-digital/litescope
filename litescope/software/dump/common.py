@@ -72,10 +72,11 @@ class DumpData(list):
 
 
 class DumpVariable:
-    def __init__(self, name, width, values=[]):
-        self.name = name
+    def __init__(self, name, width, values=[], enum=None):
+        self.name   = name
         self.width = width
         self.values = [int(v)%2**width for v in values]
+        self.enum   = {} if enum is None else dict(enum)
 
     def __len__(self):
         return len(self.values)
@@ -88,12 +89,13 @@ class Dump:
     def add(self, variable):
         self.variables.append(variable)
 
-    def add_from_layout(self, layout, variable):
+    def add_from_layout(self, layout, variable, enums=None):
+        enums = {} if enums is None else enums
         offset = 0
         for name, sample_width in layout:
             values = variable[offset:offset+sample_width]
             values2x = [values[i//2] for i in range(len(values)*2)]
-            self.add(DumpVariable(name, sample_width, values2x))
+            self.add(DumpVariable(name, sample_width, values2x, enum=enums.get(name, None)))
             offset += sample_width
 
     def add_from_layout_flatten(self, layout, variable):
