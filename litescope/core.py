@@ -331,6 +331,13 @@ class _Storage(LiteXModule):
         mem_flush = ClockDomainsRenamer("scope")(mem_flush)
         self.submodules += mem_flush
 
+        # Read-path flush: samples from a previous capture/drain can linger in the CDC FIFO and
+        # read converter; drain them during FLUSH (no new data enters the read path in that
+        # state) so the upload starts with the new capture's first sample.
+        flush_read     = Signal()
+        flush_read_sys = Signal()
+        self.specials += MultiReg(flush_read, flush_read_sys)
+
         # FSM.
         fsm = FSM(reset_state="IDLE")
         fsm = ClockDomainsRenamer("scope")(fsm)
@@ -347,6 +354,7 @@ class _Storage(LiteXModule):
             sink.ready.eq(1),
             mem_flush.wait.eq(1),
             mem.source.ready.eq(1),
+            flush_read.eq(1),
             If(mem_flush.done,
                 NextState("WAIT")
             )
@@ -381,7 +389,7 @@ class _Storage(LiteXModule):
             self.comb += cdc.source.connect(read_source)
 
         self.comb += [
-            read_source.ready.eq(self.mem_data.rd_stb | ~self.enable.storage),
+            read_source.ready.eq(self.mem_data.rd_stb | ~self.enable.storage | flush_read_sys),
             self.mem_data.status.eq(read_source.data)
         ]
 
