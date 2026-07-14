@@ -71,6 +71,10 @@ class LiteScopeAnalyzerDriver:
         self.offset = 0
         self.length = None
 
+        # Configured trigger terms (mask, value); loaded into the gateware on each run() since
+        # the trigger memory consumes its terms on every capture.
+        self.trigger_terms = []
+
         # Disable trigger and storage
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
@@ -111,24 +115,45 @@ class LiteScopeAnalyzerDriver:
             if self.name == key[:len(self.name)]:
                 key = key.replace(self.name + "_", "")
                 setattr(self, key, value)
-        for signals in self.layouts.values():
+        # Group-aware signal offsets/masks: triggers must resolve a signal's position in the
+        # currently selected group (a signal present in several groups can sit at different
+        # positions in each).
+        self.signal_offsets = {}
+        self.signal_masks   = {}
+        for group, signals in self.layouts.items():
             value = 1
             for name, length in signals:
-                setattr(self, name + "_o", value)
+                self.signal_offsets[(group, name)] = value
                 value = value*(2**length)
-        for signals in self.layouts.values():
             value = 0
             for name, length in signals:
-                setattr(self, name + "_m", (2**length-1) << value)
+                self.signal_masks[(group, name)] = (2**length-1) << value
                 value += length
+        # Keep the flat <name>_o/<name>_m attributes for compatibility; warn when a signal is
+        # ambiguous across groups (the flat attribute then reflects the last group only).
+        ambiguous = set()
+        for (group, name), offset in self.signal_offsets.items():
+            mask = self.signal_masks[(group, name)]
+            if hasattr(self, name + "_o") and \
+               ((getattr(self, name + "_o") != offset) or (getattr(self, name + "_m") != mask)):
+                ambiguous.add(name)
+            setattr(self, name + "_o", offset)
+            setattr(self, name + "_m", mask)
+        for name in sorted(ambiguous):
+            print(f"{self.name}: warning: signal '{name}' is present in several groups at "
+                   "different positions; triggers resolve it in the selected group.")
+
+    def _signal_offset(self, name):
+        return self.signal_offsets.get((self.group, name), getattr(self, name + "_o"))
+
+    def _signal_mask(self, name):
+        return self.signal_masks.get((self.group, name), getattr(self, name + "_m"))
 
     def configure_group(self, value):
         self.group = value
         self.mux_value.write(value)
 
     def add_trigger(self, value=0, mask=0, cond=None):
-        if self.trigger_mem_full.read():
-            raise ValueError("Trigger memory full, too much conditions")
         if cond is not None:
             for k, v in cond.items():
                 # Check for binary/hexa expressions
@@ -145,23 +170,41 @@ class LiteScopeAnalyzerDriver:
                         if c != "x":
                             v |= int(c, 16 if mx is not None else 2 )
                             m |= 0xf if mx is not None else 0b1
-                    value |= getattr(self, k + "_o")*v
-                    mask  |= getattr(self, k + "_m") & (getattr(self, k + "_o")*m)
+                    value |= self._signal_offset(k)*v
+                    mask  |= self._signal_mask(k) & (self._signal_offset(k)*m)
                 # Else convert to int
                 else:
-                    value |= getattr(self, k + "_o")*int(v, 0)
-                    mask  |= getattr(self, k + "_m")
-        self.trigger_mem_mask.write(mask)
-        self.trigger_mem_value.write(value)
-        self.trigger_mem_write.write(1)
+                    value |= self._signal_offset(k)*int(v, 0)
+                    mask  |= self._signal_mask(k)
+        self.trigger_terms.append((mask, value))
 
     def add_rising_edge_trigger(self, name):
-        self.add_trigger(getattr(self, name + "_o")*0, getattr(self, name + "_m"))
-        self.add_trigger(getattr(self, name + "_o")*1, getattr(self, name + "_m"))
+        self.add_trigger(self._signal_offset(name)*0, self._signal_mask(name))
+        self.add_trigger(self._signal_offset(name)*1, self._signal_mask(name))
 
     def add_falling_edge_trigger(self, name):
-        self.add_trigger(getattr(self, name + "_o")*1, getattr(self, name + "_m"))
-        self.add_trigger(getattr(self, name + "_o")*0, getattr(self, name + "_m"))
+        self.add_trigger(self._signal_offset(name)*1, self._signal_mask(name))
+        self.add_trigger(self._signal_offset(name)*0, self._signal_mask(name))
+
+    def _load_trigger_terms(self, timeout=1.0):
+        # Disarm the trigger; the gateware flushes any leftover terms (previous capture,
+        # aborted sequence) on the falling edge of enable.
+        self.trigger_enable.write(0)
+        # The flush window is 2*trigger_depth scope cycles; any CSR access takes far longer,
+        # but poll done (trigger memory empty) so the reload below cannot race the flush.
+        deadline = time.time() + timeout
+        for _ in range(2):
+            while not self.trigger_done.read():
+                if time.time() > deadline:
+                    raise TimeoutError("Trigger memory flush timeout")
+        # (Re-)load the configured terms so a capture can be re-run without reconfiguring:
+        # the trigger memory consumes its terms on every capture.
+        for mask, value in self.trigger_terms:
+            if self.trigger_mem_full.read():
+                raise ValueError("Trigger memory full, too much conditions")
+            self.trigger_mem_mask.write(mask)
+            self.trigger_mem_value.write(value)
+            self.trigger_mem_write.write(1)
 
     def configure_trigger(self, value=0, mask=0, cond=None):
         self.add_trigger(value, mask, cond)
@@ -193,8 +236,16 @@ class LiteScopeAnalyzerDriver:
         self.length = length
         if self.debug:
             self._log(f"run (offset={offset}, length={length})")
+        # Disarm the trigger and reload its terms first: a previous capture leaves the trigger
+        # armed with an empty (fully consumed) term memory, whose hit output is a constant
+        # level that would otherwise fire the re-armed storage immediately. With the terms
+        # reloaded, hit stays low until a real match.
+        self._load_trigger_terms()
         self.storage_offset.write(offset)
         self.storage_length.write(length)
+        # Storage arms on the rising edge of enable: clear it first so run() also re-arms
+        # after a previous capture on the same driver instance.
+        self.storage_enable.write(0)
         self.storage_enable.write(1)
         self.trigger_enable.write(1)
 
@@ -203,6 +254,7 @@ class LiteScopeAnalyzerDriver:
         self.offset = 0
         self.length = None
         self.rle_enabled = False
+        self.trigger_terms = []
         self.trigger_enable.write(0)
         self.storage_enable.write(0)
         if hasattr(self, "rle_enable"):
@@ -321,11 +373,12 @@ class LiteScopeAnalyzerDriver:
         self.data = DumpData(self.data_width)
         self.debug = False
         self.configure_group(group)
+        self.trigger_terms = []
         self.configure_trigger()
         self.configure_subsampler(1)
         self.run(0, 1)
         self.wait_done()
         self.upload()
-        min_idx = log2_int(getattr(self, name + "_o"))
-        max_idx = min_idx + log2_int((getattr(self, name + "_m") >> min_idx) + 1)
+        min_idx = log2_int(self._signal_offset(name))
+        max_idx = min_idx + log2_int((self._signal_mask(name) >> min_idx) + 1)
         return self.data[min_idx:max_idx][0]
