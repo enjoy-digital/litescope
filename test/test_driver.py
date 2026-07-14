@@ -70,6 +70,7 @@ def make_regs(name="analyzer", mem_level=0, mem_data=None, with_rle=False):
         "trigger_mem_value":     FakeReg(),
         "trigger_mem_write":     FakeReg(),
         "trigger_enable":        FakeReg(),
+        "trigger_done":          FakeReg(1),
         "subsampler_value":      FakeReg(),
         "storage_offset":        FakeReg(),
         "storage_length":        FakeReg(),
@@ -203,37 +204,36 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.clear_writes(regs)
 
         driver.add_trigger(cond={"flag": "1", "state": "0b1x0"})
+        self.assertEqual(driver.trigger_terms, [(0xb, 0x9)])
 
-        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0x9])
-        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xb])
-        self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1])
-
-        self.clear_writes(regs)
         driver.add_trigger(cond={"wide": "0xax"})
+        self.assertEqual(driver.trigger_terms[1], (0xf0, 0xa0))
 
-        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0xa0])
-        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xf0])
-        self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1])
+        # Terms are written to the gateware when (re)loaded, not when added.
+        self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [])
+        driver._load_trigger_terms()
+        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0x9, 0xa0])
+        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xb, 0xf0])
+        self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1, 1])
 
     def test_edge_trigger_helpers(self):
         driver, regs = self.make_driver()
         self.clear_writes(regs)
 
         driver.add_rising_edge_trigger("flag")
-        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0, 1])
-        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [1, 1])
+        self.assertEqual(driver.trigger_terms, [(1, 0), (1, 1)])
 
-        self.clear_writes(regs)
+        driver.trigger_terms = []
         driver.add_falling_edge_trigger("flag")
-        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [1, 0])
-        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [1, 1])
+        self.assertEqual(driver.trigger_terms, [(1, 1), (1, 0)])
 
-    def test_add_trigger_checks_memory_full(self):
+    def test_load_checks_memory_full(self):
         driver, regs = self.make_driver()
         regs.d["analyzer_trigger_mem_full"].value = 1
 
+        driver.add_trigger(value=1, mask=1)
         with self.assertRaises(ValueError):
-            driver.add_trigger(value=1, mask=1)
+            driver._load_trigger_terms()
 
     def test_configure_subsampler_and_run(self):
         driver, regs = self.make_driver(depth=8, subsampler_width=4)
@@ -250,13 +250,55 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(regs.d["analyzer_subsampler_value"].writes, [3, 15])
         self.assertEqual(regs.d["analyzer_storage_offset"].writes,   [2])
         self.assertEqual(regs.d["analyzer_storage_length"].writes,   [5])
-        self.assertEqual(regs.d["analyzer_storage_enable"].writes,   [1])
-        self.assertEqual(regs.d["analyzer_trigger_enable"].writes,   [1])
+        # run() re-arms storage (rising edge) and disarms/reloads/rearms the trigger.
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes,   [0, 1])
+        self.assertEqual(regs.d["analyzer_trigger_enable"].writes,   [0, 1])
 
         with self.assertRaises(AssertionError):
             driver.run(offset=8)
         with self.assertRaises(AssertionError):
             driver.run(length=9)
+
+    def test_run_reloads_trigger_terms(self):
+        driver, regs = self.make_driver()
+        self.clear_writes(regs)
+
+        driver.add_trigger(value=0x3, mask=0x7)
+        driver.add_trigger(value=0x1, mask=0x1)
+
+        driver.run(offset=0, length=8)
+        driver.run(offset=0, length=8)
+
+        # Both terms are loaded on each run so captures can be re-run without reconfiguring.
+        self.assertEqual(regs.d["analyzer_trigger_mem_value"].writes, [0x3, 0x1, 0x3, 0x1])
+        self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0x7, 0x1, 0x7, 0x1])
+        self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1, 1, 1, 1])
+        self.assertEqual(regs.d["analyzer_trigger_enable"].writes,    [0, 1, 0, 1])
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes,    [0, 1, 0, 1])
+
+    def test_multi_group_signal_offsets(self):
+        # A signal present in several groups can sit at different positions in each; triggers
+        # must resolve it in the currently selected group.
+        self.tmpdir = tempfile.TemporaryDirectory()
+        config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
+        with open(config_csv, "w") as f:
+            f.write("config,None,data_width,8\n")
+            f.write("config,None,depth,16\n")
+            f.write("config,None,samplerate,100000000\n")
+            f.write("signal,0,flag,1\n")
+            f.write("signal,0,shared,3\n")
+            f.write("signal,1,shared,3\n")
+        regs   = make_regs()
+        driver = LiteScopeAnalyzerDriver(regs, "analyzer", config_csv=config_csv)
+
+        # Group 0: shared sits above flag; group 1: shared sits at bit 0.
+        driver.configure_group(0)
+        driver.add_trigger(cond={"shared": "0b101"})
+        self.assertEqual(driver.trigger_terms[-1], (0xe, 0xa))
+
+        driver.configure_group(1)
+        driver.add_trigger(cond={"shared": "0b101"})
+        self.assertEqual(driver.trigger_terms[-1], (0x7, 0x5))
 
     def test_configure_subsampler_rejects_invalid_values(self):
         driver, regs = self.make_driver(subsampler_width=4)
