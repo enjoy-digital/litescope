@@ -67,7 +67,11 @@ class _Trigger(LiteXModule):
         self.specials += MultiReg(done, self.done.status)
 
         # Memory and configuration.
-        mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth)
+        # Use a buffered AsyncFIFO so Mask/Value come from registers: the unbuffered FIFO's
+        # output is the block RAM read port, whose clock-to-output delay would otherwise feed
+        # the data_width-wide comparator and the consume handshake within a single scope cycle
+        # and break timing as probes get wide.
+        mem = stream.AsyncFIFO([("mask", data_width), ("value", data_width)], depth, buffered=True)
         mem = ClockDomainsRenamer({"write": "sys", "read": "scope"})(mem)
         self.submodules += mem
         self.comb += [
@@ -77,20 +81,40 @@ class _Trigger(LiteXModule):
             self.mem_full.status.eq(~mem.sink.ready)
         ]
 
+        # Register Sink Data/Valid so the data_width-wide comparator sits between registers. The
+        # probe stream is free-running (the Mux always asserts valid), so sampling it
+        # unconditionally delays Data and Hit together by one cycle and preserves their
+        # alignment (the trigger position within the capture is unchanged).
+        sink_d = stream.Endpoint(core_layout(data_width))
+        self.sync.scope += [
+            sink_d.valid.eq(sink.valid),
+            sink_d.data.eq(sink.data),
+        ]
+        self.comb += sink.ready.eq(1)
+
         # Hit and memory read/flush.
-        hit   = Signal()
-        flush = WaitTimer(2*depth)
-        flush = ClockDomainsRenamer("scope")(flush)
-        self.submodules += flush
+        # Flush pending terms on the falling edge of enable and stop as soon as the memory is
+        # empty: a fixed-duration flush window (previous implementation) also ran from reset and
+        # kept draining after the memory was already empty, silently consuming terms pushed
+        # shortly after reset or re-arming - the capture then started with an empty term memory,
+        # i.e. an immediate spurious trigger (easily hit with fast CSR transports).
+        hit      = Signal()
+        flushing = Signal()
+        self.sync.scope += [
+            If(~enable & enable_d,
+                flushing.eq(1)
+            ).Elif(~mem.source.valid,
+                flushing.eq(0)
+            )
+        ]
         self.comb += [
-            flush.wait.eq(~(~enable & enable_d)), # flush when disabling
-            hit.eq((sink.data & mem.source.mask) == (mem.source.value & mem.source.mask)),
-            mem.source.ready.eq((enable & hit) | ~flush.done),
+            hit.eq((sink_d.data & mem.source.mask) == (mem.source.value & mem.source.mask)),
+            mem.source.ready.eq((enable & sink_d.valid & hit) | flushing),
         ]
 
         # Output.
         self.comb += [
-            sink.connect(source),
+            sink_d.connect(source, omit={"ready"}),
             # Done when all triggers have been consumed.
             done.eq(~mem.source.valid),
             source.hit.eq(done)

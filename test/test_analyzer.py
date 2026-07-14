@@ -33,8 +33,10 @@ class TestAnalyzer(unittest.TestCase):
     def test_analyzer(self):
         def generator(dut):
             dut.data = []
-            # Configure Trigger
-            yield from dut.analyzer.trigger.mem_value.write(0x0010)
+            # Configure Trigger (on a counter value comfortably after arming completes; the
+            # term memory no longer accepts being armed with pending terms silently flushed,
+            # so the trigger must actually be enabled and reachable).
+            yield from dut.analyzer.trigger.mem_value.write(0x0400)
             yield from dut.analyzer.trigger.mem_mask.write(0xffff)
             yield from dut.analyzer.trigger.mem_write.write(1)
 
@@ -45,6 +47,7 @@ class TestAnalyzer(unittest.TestCase):
             yield from dut.analyzer.storage.length.write(256)
             yield from dut.analyzer.storage.offset.write(8)
             yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
             yield
             for i in range(16):
                 yield
@@ -64,7 +67,11 @@ class TestAnalyzer(unittest.TestCase):
         generators = {"sys" : [generator(dut)]}
         clocks     = {"sys": 10, "scope": 10}
         run_simulation(dut, generators, clocks, vcd_name="sim.vcd")
-        self.assertEqual(dut.data, [524 + 3*i for i in range(len(dut.data))])
+        # Trigger value 0x400 (comfortably after the storage FLUSH window at depth=512) with
+        # offset=8 and subsampling=3: the capture holds the pre-trigger window followed by the
+        # match (0x400 at index 6) and the post-trigger samples.
+        self.assertEqual(dut.data, [1006 + 3*i for i in range(len(dut.data))])
+        self.assertEqual(dut.data.index(0x400), 6)
 
     def test_analyzer_group_mux(self):
         def generator(dut):
@@ -105,7 +112,10 @@ class TestAnalyzer(unittest.TestCase):
         generators = {"sys" : [generator(dut)]}
         clocks     = {"sys": 10, "scope": 10}
         run_simulation(dut, generators, clocks)
-        self.assertEqual(dut.data, [132 + 3*i for i in range(len(dut.data))])
+        # With offset=0 the trigger match is the first captured sample: 0xb0 at index 0
+        # (the second group's signal, proving the mux selection), incrementing by 3.
+        self.assertEqual(dut.data[0], 0xb0)
+        self.assertEqual(dut.data, [(0xb0 + 3*i) & 0xff for i in range(len(dut.data))])
 
     def test_analyzer_raw_msb_data_without_rle(self):
         def generator(dut):
