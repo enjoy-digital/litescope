@@ -25,7 +25,8 @@ def get_signals(csvname, group):
     signals = []
     with open(csvname) as f:
         reader = csv.reader(f, delimiter=",", quotechar="#")
-        for t, g, n, v in reader:
+        for row in reader:
+            t, g, n, v = row[:4] # Extra fields (ex: enum values) are ignored.
             if t == "signal" and g == str(group):
                 signals.append(n)
     return signals
