@@ -9,6 +9,7 @@
 
 import os
 import re
+import json
 import csv
 import sys
 import time
@@ -21,25 +22,27 @@ from litescope import LiteScopeAnalyzerDriver
 
 # Helpers ------------------------------------------------------------------------------------------
 
-def get_signals(csvname, group):
+def get_signals(csvname, group, with_width=False):
     signals = []
     with open(csvname) as f:
         reader = csv.reader(f, delimiter=",", quotechar="#")
         for row in reader:
             t, g, n, v = row[:4] # Extra fields (ex: enum values) are ignored.
             if t == "signal" and g == str(group):
-                signals.append(n)
+                signals.append({"name": n, "width": int(v)} if with_width else n)
     return signals
 
 class Finder:
-    def __init__(self, signals):
+    def __init__(self, signals, verbose=True):
         self.signals = signals
+        self.verbose = verbose
 
     def __getitem__(self, name):
         scores = {s: 0 for s in self.signals}
         # Exact match
         if name in scores:
-            print("Exact:", name)
+            if self.verbose:
+                print("Exact:", name)
             return name
         # Substring
         pattern = re.compile(name)
@@ -54,25 +57,26 @@ class Finder:
         name, score = best[0]
         return name
 
-def add_triggers(args, analyzer, signals):
+def add_triggers(args, analyzer, signals, verbose=True):
     added  = False
-    finder = Finder(signals)
+    finder = Finder(signals, verbose)
+    log    = print if verbose else (lambda *args: None)
 
     for signal in args.rising_edge or []:
         name = finder[signal]
         analyzer.add_rising_edge_trigger(name)
-        print(f"Rising edge: {name}")
+        log(f"Rising edge: {name}")
         added = True
     for signal in args.falling_edge or []:
         name = finder[signal]
         analyzer.add_falling_edge_trigger(finder[signal])
-        print(f"Falling edge: {name}")
+        log(f"Falling edge: {name}")
         added = True
     cond = {}
     for signal, value in args.value_trigger or []:
         name = finder[signal]
         cond[finder[signal]] = value
-        print(f"Condition: {name} == {value}")
+        log(f"Condition: {name} == {value}")
     if cond:
         analyzer.add_trigger(cond=cond)
         added = True
@@ -81,29 +85,51 @@ def add_triggers(args, analyzer, signals):
 # Run Batch/GUI  -----------------------------------------------------------------------------------
 
 def run_batch(args):
+    json_output = getattr(args, "json",    False)
+    timeout     = getattr(args, "timeout", None)
     bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
     bus.open()
 
     basename = os.path.splitext(os.path.basename(args.csv))[0]
     signals  = get_signals(args.csv, args.group)
+    result   = {"schema": 1, "group": args.group, "triggered": False}
 
-    # Configure and run LiteScope analyzer.
-    analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
-    analyzer.configure_group(args.group)
-    analyzer.configure_subsampler(args.subsampling)
-    analyzer.configure_rle(args.rle)
-    if not add_triggers(args, analyzer, signals):
-        print("No trigger, immediate capture.")
-    analyzer.run(
-        offset = int(args.offset, 0),
-        length = None if args.length is None else int(args.length, 0)
-    )
-    analyzer.wait_done()
-    analyzer.upload()
-    analyzer.save(args.dump)
-
-    # Close remove control.
-    bus.close()
+    try:
+        # Configure and run LiteScope analyzer.
+        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=not json_output)
+        analyzer.configure_group(args.group)
+        analyzer.configure_subsampler(args.subsampling)
+        analyzer.configure_rle(args.rle)
+        if not add_triggers(args, analyzer, signals, verbose=not json_output):
+            if not json_output:
+                print("No trigger, immediate capture.")
+        analyzer.run(
+            offset = int(args.offset, 0),
+            length = None if args.length is None else int(args.length, 0)
+        )
+        if timeout is None:
+            analyzer.wait_done()
+        else:
+            # Bounded wait: a trigger that never fires must not block the caller forever.
+            start = time.time()
+            while not analyzer.done():
+                if (time.time() - start) > timeout:
+                    if not json_output:
+                        print(f"Trigger did not fire within {timeout}s.")
+                    return result
+                time.sleep(0.05)
+        data = analyzer.upload()
+        analyzer.save(args.dump)
+        result.update({
+            "triggered" : True,
+            "dump"      : os.path.abspath(args.dump),
+            "samples"   : None if data is None else len(data),
+            "offset"    : int(args.offset, 0),
+        })
+        return result
+    finally:
+        # Close remove control.
+        bus.close()
 
 def run_gui(args):
     import dearpygui.dearpygui as dpg
@@ -198,11 +224,12 @@ def parse_args():
     parser.add_argument("--length",              default=None,             help="Stored sample/word count to capture; default is analyzer depth.")
     parser.add_argument("--dump",                default="dump.vcd",       help="Capture Filename.")
     parser.add_argument("--gui",                 action="store_true",      help="Run Gui.")
+    parser.add_argument("--timeout",             default=None, type=float, help="Give up when the trigger has not fired after N seconds (exit code 2).")
+    parser.add_argument("--json",                action="store_true",      help="Print the result as one JSON object (for scripts/agents); errors as {\"error\": ...}, exit code 1.")
     args = parser.parse_args()
     return args
 
-def main():
-    args = parse_args()
+def _run(args):
 
     # Check if analyzer file is present and exit if not.
     if not os.path.exists(args.csv):
@@ -212,6 +239,8 @@ def main():
 
     # If in list mode, list signals and exit.
     if args.list:
+        if args.json:
+            return {"schema": 1, "group": args.group, "signals": get_signals(args.csv, args.group, with_width=True)}
         signals = get_signals(args.csv, args.group)
         for signal in signals:
             print(signal)
@@ -226,8 +255,21 @@ def main():
     if args.gui:
         run_gui(args)
     else:
-        run_batch(args)
+        return run_batch(args)
 
+def main():
+    args = parse_args()
+    if args.json:
+        try:
+            result = _run(args)
+        except Exception as e:
+            print(json.dumps({"schema": 1, "error": f"{type(e).__name__}: {e}"}))
+            sys.exit(1)
+        print(json.dumps(result))
+        sys.exit(0 if result.get("triggered", True) else 2)
+    result = _run(args)
+    if isinstance(result, dict) and not result.get("triggered", True):
+        sys.exit(2)
 
 if __name__ == "__main__":
     main()
