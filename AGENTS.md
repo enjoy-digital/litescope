@@ -16,7 +16,8 @@ verify a change, contribute back). Index of the whole wiki for agents: https://g
 
 ```sh
 python3 -m pytest -v                                               # what CI runs (includes simulations)
-litescope_cli --csv analyzer.csv --csr-csv csr.csv --list          # against a running SoC (litex_server)
+litescope_cli --csv analyzer.csv --csr-csv csr.csv --list --json   # against a running SoC (litex_server)
+litescope_cli --csv analyzer.csv --csr-csv csr.csv -r <signal> --timeout 10 --json   # capture; exit code 2 if no trigger
 ```
 
 - Trigger values are strings (`"0b1"`, `"0x10"`).
@@ -24,6 +25,8 @@ litescope_cli --csv analyzer.csv --csr-csv csr.csv --list          # against a r
   `--no-compile`.
 - Keep analyzers in one clock domain (prefer `sys`) and below ~128 bits: an analyzer in a fast
   transceiver domain can fail timing itself and give wrong captures.
+- When a script or an agent drives captures, use `--json` (one result object, `{"error"}` and exit
+  code 1 on errors) and `--timeout` (a trigger that never fires exits with code 2 instead of blocking).
 
 ## Rules
 
