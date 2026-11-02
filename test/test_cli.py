@@ -42,6 +42,7 @@ class FakeAnalyzer:
         self.config_csv = config_csv
         self.debug      = debug
         self.calls      = []
+        self.fires      = True
         FakeAnalyzer.instances.append(self)
 
     def configure_group(self, value):
@@ -68,8 +69,13 @@ class FakeAnalyzer:
     def wait_done(self):
         self.calls.append(("wait_done",))
 
+    def done(self):
+        self.calls.append(("done",))
+        return self.fires
+
     def upload(self):
         self.calls.append(("upload",))
+        return [0]*16
 
     def save(self, filename):
         self.calls.append(("save", filename))
@@ -189,6 +195,62 @@ class TestCLI(unittest.TestCase):
             ("upload",),
             ("save", args.dump),
         ])
+
+    def _run_main(self, tmpdir, *extra, fires=True):
+        csvname = os.path.join(tmpdir, "analyzer.csv")
+        csr_csv = os.path.join(tmpdir, "csr.csv")
+        self.write_csv(csvname)
+        open(csr_csv, "w").close()
+        argv = ["litescope_cli", "--csv", csvname, "--csr-csv", csr_csv,
+            "--dump", os.path.join(tmpdir, "dump.vcd")] + list(extra)
+        stdout = io.StringIO()
+        class Analyzer(FakeAnalyzer):
+            def __init__(self, *args, **kwargs):
+                FakeAnalyzer.__init__(self, *args, **kwargs)
+                self.fires = fires
+        with mock.patch.object(sys, "argv", argv), mock.patch("sys.stdout", stdout), \
+             mock.patch.object(litescope_cli, "RemoteClient", FakeBus), \
+             mock.patch.object(litescope_cli, "LiteScopeAnalyzerDriver", Analyzer):
+            with self.assertRaises(SystemExit) as cm:
+                litescope_cli.main()
+        return cm.exception.code, stdout.getvalue()
+
+    def test_json_list(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, out = self._run_main(tmpdir, "--list", "--json")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["signals"], [{"name": "flag", "width": 1}, {"name": "state", "width": 3}])
+
+    def test_json_capture(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, out = self._run_main(tmpdir, "--json", "-r", "flag", "--timeout", "1")
+        r = json.loads(out) # Nothing else printed in JSON mode.
+        self.assertEqual(code, 0)
+        self.assertTrue(r["triggered"])
+        self.assertEqual(r["samples"], 16)
+        self.assertFalse(FakeAnalyzer.instances[-1].debug)
+
+    def test_timeout(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, out = self._run_main(tmpdir, "--json", "-r", "flag", "--timeout", "0.2", fires=False)
+        self.assertEqual(code, 2)
+        self.assertFalse(json.loads(out)["triggered"])
+        self.assertNotIn(("upload",), FakeAnalyzer.instances[-1].calls)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            code, out = self._run_main(tmpdir, "-r", "flag", "--timeout", "0.2", fires=False)
+        self.assertEqual(code, 2)
+        self.assertIn("Trigger did not fire", out)
+
+    def test_json_error(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with mock.patch.object(FakeBus, "open", side_effect=ConnectionRefusedError("refused")):
+                code, out = self._run_main(tmpdir, "--json")
+        self.assertEqual(code, 1)
+        self.assertIn("ConnectionRefusedError", json.loads(out)["error"])
 
 
 if __name__ == "__main__":
