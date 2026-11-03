@@ -315,6 +315,66 @@ class TestAnalyzer(unittest.TestCase):
         self.assertEqual(analyzer.groups[0], [signal, record.field0, record.field1])
         self.assertEqual(analyzer.data_width, 9)
 
+    def test_format_groups_accepts_expressions(self):
+        # Slices, Cat and other Migen expressions are not hashable: they are driven into named
+        # Signals so duplicate removal and the CSV export still work.
+        counter = Signal(32)
+        flag    = Signal()
+        analyzer = LiteScopeAnalyzer([counter[:16], counter[31], Cat(flag, counter[16:20]), flag, flag],
+            depth=16, csr_csv=None)
+
+        signals = analyzer.groups[0]
+        self.assertTrue(all(isinstance(s, Signal) for s in signals))
+        self.assertEqual([len(s) for s in signals], [16, 1, 5, 1])
+        self.assertIs(signals[3], flag)
+        self.assertEqual(analyzer.data_width, 23)
+
+        from migen.fhdl.verilog import convert
+        ns = convert(analyzer, ios=set()).ns
+        with tempfile.NamedTemporaryFile() as f:
+            analyzer.export_csv(ns, f.name)
+            with open(f.name) as csv_file:
+                lines = [l for l in csv_file.read().splitlines() if l.startswith("signal,")]
+        self.assertEqual([l.split(",")[3] for l in lines], ["16", "1", "5", "1"])
+        self.assertTrue(lines[0].split(",")[2].endswith("counter_15_0"))
+        self.assertTrue(lines[1].split(",")[2].endswith("counter_31"))
+
+    def test_analyzer_captures_slice(self):
+        def generator(dut):
+            yield from dut.analyzer.trigger.mem_value.write(0x40)
+            yield from dut.analyzer.trigger.mem_mask.write(0xff)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(16)
+            yield from dut.analyzer.storage.offset.write(4)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            yield
+            seen_busy = False
+            for i in range(1024):
+                done = (yield from dut.analyzer.storage.done.read())
+                if not done:
+                    seen_busy = True
+                elif seen_busy:
+                    break
+                yield
+            else:
+                raise TimeoutError("Capture did not complete")
+            dut.data = (yield from read_capture_words(dut.analyzer, 16))
+
+        class DUT(Module):
+            def __init__(self):
+                counter = Signal(32, reset=0x1200)
+                self.sync += counter.eq(counter + 1)
+                self.submodules.analyzer = LiteScopeAnalyzer(counter[:8], 32, csr_csv=None)
+
+        dut = DUT()
+        run_simulation(dut, {"sys": [generator(dut)]}, {"sys": 10, "scope": 10})
+        self.assertEqual(dut.analyzer.data_width, 8)
+        # Contiguous low byte of the counter around the trigger value.
+        self.assertEqual(dut.data, [(dut.data[0] + i) & 0xff for i in range(16)])
+        self.assertIn(0x40, dut.data[:8])
+
     def test_export_csv(self):
         signal_a = Signal(3)
         signal_b = Signal(5)

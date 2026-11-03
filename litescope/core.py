@@ -8,6 +8,7 @@
 
 from migen import *
 from migen.genlib.cdc import MultiReg, PulseSynchronizer
+from migen.fhdl.structure import _Slice
 
 from litex.gen import *
 from litex.gen.genlib.misc import WaitTimer
@@ -487,11 +488,28 @@ class LiteScopeAnalyzer(LiteXModule):
                     s.do_finalize()
                     s.finalized = True
                     split_signals.append(s.state)
-                else:
+                elif isinstance(s, Signal):
                     split_signals.append(s)
+                else:
+                    split_signals.append(self.expression_to_signal(s))
             split_signals = list(dict.fromkeys(split_signals)) # Remove duplicates.
             new_groups[n] = split_signals
         return new_groups
+
+    def expression_to_signal(self, e):
+        # Expressions (slices, Cat, operators, constants...) are neither hashable nor nameable:
+        # drive a named Signal from them so they can be deduplicated and exported to the CSV.
+        e = wrap(e)
+        name = "expr"
+        if isinstance(e, _Slice) and isinstance(e.value, Signal) and e.value.backtrace:
+            base = e.value.backtrace[-1][0]
+            if (e.stop - e.start) == 1:
+                name = f"{base}_{e.start}"
+            else:
+                name = f"{base}_{e.stop - 1}_{e.start}"
+        s = Signal(len(e), name=name)
+        self.comb += s.eq(e)
+        return s
 
     def export_csv(self, vns, filename):
         def format_line(*args):
