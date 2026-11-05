@@ -69,7 +69,7 @@ class TestAnalyzer(unittest.TestCase):
         dut = DUT()
         generators = {"sys" : [generator(dut)]}
         clocks     = {"sys": 10, "scope": 10}
-        run_simulation(dut, generators, clocks, vcd_name="sim.vcd")
+        run_simulation(dut, generators, clocks, vcd_name=None)
         # Trigger value 0x400 (comfortably after the storage FLUSH window at depth=512) with
         # offset=8 and subsampling=3: the capture holds the pre-trigger window followed by the
         # match (0x400 at index 6) and the post-trigger samples.
