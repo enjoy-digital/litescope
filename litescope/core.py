@@ -307,10 +307,23 @@ class _Storage(LiteXModule):
         # # #
 
         # Control re-synchronization.
-        enable   = Signal()
-        enable_d = Signal()
-        self.specials += MultiReg(self.enable.storage, enable, "scope")
-        self.sync.scope += enable_d.eq(enable)
+        # Each rising edge of Enable toggles arm_req (sys); the scope domain sees the toggle (arm)
+        # and returns it on arm_ack. A toggle is a level: it crosses even when Enable is only
+        # cleared for a few sys cycles (run() writes 0 then 1) with a slower scope clock.
+        enable_sys_d = Signal()
+        arm_req      = Signal()
+        arm_req_s    = Signal()
+        arm_ack      = Signal()
+        arm          = Signal()
+        self.sync += [
+            enable_sys_d.eq(self.enable.storage),
+            If(self.enable.storage & ~enable_sys_d,
+                arm_req.eq(~arm_req)
+            )
+        ]
+        self.specials += MultiReg(arm_req, arm_req_s, "scope")
+        self.sync.scope += arm_ack.eq(arm_req_s)
+        self.comb += arm.eq(arm_req_s != arm_ack)
 
         length = Signal().like(self.length.storage)
         offset = Signal().like(self.offset.storage)
@@ -318,10 +331,23 @@ class _Storage(LiteXModule):
         self.specials += MultiReg(self.offset.storage, offset, "scope")
 
         # Status re-synchronization.
-        done  = Signal()
-        level = Signal().like(self.mem_level.status)
-        self.specials += MultiReg(done, self.done.status)
+        # Done is masked from the rising edge of Enable until the arming has been seen by the
+        # scope domain (plus one sys cycle, so that the re-synchronized Done has dropped): a read
+        # of Done right after the arming does not report the previous capture.
+        done        = Signal()
+        done_sys    = Signal()
+        arm_ack_sys = Signal()
+        arm_ack_d   = Signal()
+        level       = Signal().like(self.mem_level.status)
+        self.specials += MultiReg(done, done_sys)
+        self.specials += MultiReg(arm_ack, arm_ack_sys)
         self.specials += MultiReg(level, self.mem_level.status)
+        self.sync += arm_ack_d.eq(arm_ack_sys)
+        self.comb += self.done.status.eq(done_sys &
+            ~(self.enable.storage & ~enable_sys_d) & # Rising edge of Enable.
+            (arm_req == arm_ack_sys)               & # Arming not seen by the scope domain yet.
+            (arm_ack_sys == arm_ack_d)               # Arming just seen, Done not dropped yet.
+        )
 
         # Memory.
         mem = stream.SyncFIFO([("data", data_width)], depth, buffered=True)
@@ -350,7 +376,7 @@ class _Storage(LiteXModule):
         self.submodules += fsm
         fsm.act("IDLE",
             done.eq(1),
-            If(enable & ~enable_d,
+            If(arm,
                 NextState("FLUSH")
             ),
             sink.ready.eq(1),
