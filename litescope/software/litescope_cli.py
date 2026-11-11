@@ -227,6 +227,13 @@ def parse_args():
     parser.add_argument("--gui",                 action="store_true",      help="Run Gui.")
     parser.add_argument("--timeout",             default=None, type=float, help="Give up when the trigger has not fired after N seconds (exit code 2).")
     parser.add_argument("--json",                action="store_true",      help="Print the result as one JSON object (for scripts/agents); errors as {\"error\": ...}, exit code 1.")
+    # With --json, command-line errors are reported as a JSON error with exit code 1, like the
+    # other errors (argparse exits with code 2, the code of a trigger timeout).
+    if "--json" in sys.argv[1:]:
+        def json_error(message):
+            print(json.dumps({"schema": 1, "error": f"ArgumentError: {message}"}))
+            sys.exit(1)
+        parser.error = json_error
     args = parser.parse_args()
     return args
 
