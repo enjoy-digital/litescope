@@ -46,6 +46,10 @@ jobs:
       - name: Install Project
         run: python3 setup.py develop --user
 
+      # Register Appendix (CSR snapshots and A_registers.md up to date with the gateware)
+      - name: Check Register Appendix
+        run: python3 doc/manual/tools/csr_doc.py dump --check && python3 doc/manual/tools/csr_doc.py generate --check
+
       # Test
       - name: Run Tests
         run: python3 -m pytest -v
