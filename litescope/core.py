@@ -216,49 +216,48 @@ class _RLE(LiteXModule):
                 NextState("RUN")
             )
         )
+        # The probe stream does not stall (the Trigger always accepts samples): RUN consumes one
+        # sample per cycle and emits at most one word per cycle. A new value after a run gives
+        # two words (run, raw value): the raw value is emitted on the next cycle from Pending
+        # (a run only grows on cycles that emit nothing, so Pending is free when a run ends).
+        pending_valid = Signal()
         fsm.act("RUN",
+            sink.ready.eq(1),
             If(~active_enable,
                 NextValue(count, 0),
+                NextValue(pending_valid, 0),
                 NextState("BYPASS")
             ).Elif(self.flush & (count != 0),
                 emit_rle(),
-                If(source.ready,
-                    NextValue(count, 0)
-                )
-            ).Elif(count == max_count,
-                emit_rle(),
-                If(source.ready,
-                    NextValue(count, 0)
-                )
-            ).Elif(sink.valid,
-                If(sink.data == last_data,
-                    sink.ready.eq(1),
-                    NextValue(count, count + 1)
-                ).Else(
-                    If(count != 0,
-                        emit_rle(),
-                        sink.ready.eq(source.ready),
-                        If(source.ready,
-                            NextValue(count, 0),
-                            NextValue(pending_data, sink.data),
-                            NextValue(pending_hit,  sink.hit),
-                            NextState("EMIT_RAW")
+                NextValue(count, 0)
+            ).Else(
+                If(pending_valid,
+                    emit_raw(pending_data, pending_hit)
+                ),
+                NextValue(pending_valid, 0),
+                If(sink.valid,
+                    If(sink.data == last_data,
+                        If(count == max_count,
+                            emit_rle(),
+                            NextValue(count, 1)
+                        ).Else(
+                            NextValue(count, count + 1)
                         )
                     ).Else(
-                        emit_raw(sink.data, sink.hit),
-                        sink.ready.eq(source.ready),
-                        If(source.ready,
-                            NextValue(last_data, sink.data)
+                        NextValue(last_data, sink.data),
+                        If((count != 0) | pending_valid,
+                            If(count != 0,
+                                emit_rle()
+                            ),
+                            NextValue(count, 0),
+                            NextValue(pending_data,  sink.data),
+                            NextValue(pending_hit,   sink.hit),
+                            NextValue(pending_valid, 1)
+                        ).Else(
+                            emit_raw(sink.data, sink.hit)
                         )
                     )
                 )
-            )
-        )
-        fsm.act("EMIT_RAW",
-            emit_raw(pending_data, pending_hit),
-            If(source.ready,
-                NextValue(last_data, pending_data),
-                NextState("RUN")
             )
         )
 

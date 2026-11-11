@@ -263,6 +263,58 @@ class TestAnalyzer(unittest.TestCase):
         self.assertGreater(len(set(decoded_samples)), 3)
         self.assertTrue(all(b in (a, a + 1) for a, b in zip(decoded_samples, decoded_samples[1:])))
 
+    def test_analyzer_rle_preserves_run_lengths(self):
+        # The probe stream never stalls: the encoder must not drop samples when a run ends
+        # (run word then raw value) nor when a full run word is emitted.
+        def run(shift, rle_length, length=32):
+            def generator(dut):
+                yield from dut.analyzer.trigger.mem_value.write(0)
+                yield from dut.analyzer.trigger.mem_mask.write(0)
+                yield from dut.analyzer.trigger.mem_write.write(1)
+                yield from dut.analyzer.rle.enable.write(1)
+                yield from dut.analyzer.subsampler.value.write(0)
+                yield from dut.analyzer.storage.length.write(length)
+                yield from dut.analyzer.storage.offset.write(0)
+                yield from dut.analyzer.storage.enable.write(1)
+                yield from dut.analyzer.trigger.enable.write(1)
+                while (yield from dut.analyzer.storage.done.read()):
+                    yield
+                while not (yield from dut.analyzer.storage.done.read()):
+                    yield
+                dut.data = (yield from read_capture_words(dut.analyzer, length))
+
+            class DUT(Module):
+                def __init__(self):
+                    counter = Signal(12)
+                    value   = Signal(4)
+                    self.sync += counter.eq(counter + 1)
+                    self.comb += value.eq(counter[shift:shift+4])
+                    self.submodules.analyzer = LiteScopeAnalyzer(value, 64,
+                        with_rle   = True,
+                        rle_length = rle_length,
+                        csr_csv    = None)
+
+            dut = DUT()
+            run_simulation(dut, {"sys" : [generator(dut)]}, {"sys": 10, "scope": 10})
+            encoded = DumpData(dut.analyzer.storage_width)
+            encoded.extend(dut.data)
+            decoded = list(encoded.decode_rle(data_width=dut.analyzer.data_width))
+            runs = []
+            for sample in decoded:
+                if runs and runs[-1][0] == sample:
+                    runs[-1][1] += 1
+                else:
+                    runs.append([sample, 1])
+            return runs
+
+        # Runs of 4 (rle_length 8) and runs of 8 split in full run words (rle_length 4): the
+        # first/last runs are cut by the capture window, the others keep their length.
+        for shift, rle_length in [(2, 8), (3, 4)]:
+            runs = run(shift, rle_length)
+            self.assertGreater(len(runs), 3)
+            self.assertEqual([n for v, n in runs[1:-1]], [2**shift]*(len(runs) - 2),
+                msg=f"runs of {2**shift} with rle_length {rle_length}: {runs}")
+
     def test_analyzer_rle_disabled_keeps_raw_capture(self):
         def generator(dut):
             yield from dut.analyzer.trigger.mem_value.write(0)
