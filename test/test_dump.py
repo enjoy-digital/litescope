@@ -165,6 +165,21 @@ class TestDump(unittest.TestCase):
             ("high", 4, [0xb, 0xb, 0x4, 0x4]),
         ])
 
+    def test_scope_trig_marks_trigger_sample(self):
+        data = DumpData(4)
+        data.extend([0x1, 0x2, 0x3, 0x4])
+
+        dump = Dump()
+        dump.add_from_layout([("bus", 4)], data)
+        dump.add_scope_clk()
+        dump.add_scope_trig(2)
+
+        bus, clk, trig = dump.variables
+        self.assertEqual(clk.values,  [1, 0, 1, 0, 1, 0, 1, 0])
+        self.assertEqual(trig.values, [0, 0, 0, 0, 1, 1, 1, 1])
+        # scope_trig rises with the trigger sample (index 2).
+        self.assertEqual(bus.values[trig.values.index(1)], 0x3)
+
     def test_add_from_layout_flatten(self):
         data = DumpData(4)
         data.extend([0b1010, 0b0101])
