@@ -271,7 +271,11 @@ class LiteScopeAnalyzerDriver:
                 time.sleep(delay)
 
     def upload(self, max_samples=None):
+        # Once done, the storage memory drains into the read path (CDC, width converter) and
+        # mem_level no longer counts these words: read the configured length when known.
         length = self.storage_mem_level.read()
+        if self.length is not None:
+            length = self.length
         if self.debug:
             self._log(f"upload (words={length})")
 
