@@ -222,6 +222,25 @@ class TestDump(unittest.TestCase):
                 ("flag",     1, [1, 0, 1]),
             ])
 
+    def test_sigrok_keeps_directory_named_after_file(self):
+        capture = Dump()
+        capture.add(DumpVariable("flag", 1, [1, 0, 1]))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = os.path.join(tmpdir, "dump")
+            os.makedirs(directory)
+            keep = os.path.join(directory, "keep.txt")
+            open(keep, "w").close()
+
+            filename = os.path.join(tmpdir, "dump.sr")
+            SigrokDump(capture, samplerate=125e6).write(filename)
+            self.assertTrue(os.path.exists(keep))
+
+            loaded = SigrokDump()
+            loaded.read(filename)
+            self.assertTrue(os.path.exists(keep))
+            self.assertEqual(loaded.variables[0].values, [1, 0, 1])
+
     def test_vcd(self):
         filename = "dump.vcd"
         VCDDump(dump).write(filename)
