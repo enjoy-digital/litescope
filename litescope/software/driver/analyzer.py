@@ -232,6 +232,9 @@ class LiteScopeAnalyzerDriver:
             length = self.depth
         assert offset < self.depth
         assert length <= self.depth
+        # The trigger sample is at index offset: offset >= length would only capture pre-trigger
+        # samples (and more than length words).
+        assert offset < length, "offset ({}) must be < length ({})".format(offset, length)
         self.offset = offset
         self.length = length
         if self.debug:
