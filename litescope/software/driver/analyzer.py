@@ -141,7 +141,7 @@ class LiteScopeAnalyzerDriver:
             setattr(self, name + "_m", mask)
         for name in sorted(ambiguous):
             print(f"{self.name}: warning: signal '{name}' is present in several groups at "
-                   "different positions; triggers resolve it in the selected group.")
+                   "different positions; triggers resolve it in the selected group.", file=sys.stderr)
 
     def _signal_offset(self, name):
         return self.signal_offsets.get((self.group, name), getattr(self, name + "_o"))
