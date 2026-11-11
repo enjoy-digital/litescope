@@ -114,8 +114,14 @@ class _Trigger(LiteXModule):
         ]
 
         # Output.
+        # Done (all terms consumed) rises one cycle after the last term matched sink_d: delay
+        # Data/Valid by one more cycle so Hit is set from the matching sample on (the trigger
+        # sample is the first sample with Hit set).
+        self.sync.scope += [
+            source.valid.eq(sink_d.valid),
+            source.data.eq(sink_d.data),
+        ]
         self.comb += [
-            sink_d.connect(source, omit={"ready"}),
             # Done when all triggers have been consumed.
             done.eq(~mem.source.valid),
             source.hit.eq(done)
@@ -360,15 +366,24 @@ class _Storage(LiteXModule):
                 NextState("WAIT")
             )
         )
+        # Pre-trigger samples still in the memory: the buffered memory holds samples in flight
+        # that WAIT can not drop yet, RUN drops them until exactly Offset samples precede the
+        # trigger sample.
+        pre_count = Signal().like(mem.level)
         fsm.act("WAIT",
             sink.connect(mem.sink, omit={"hit"}),
+            mem.source.ready.eq(mem.level > offset),
+            NextValue(pre_count, mem.level - (mem.source.valid & mem.source.ready)),
             If(sink.valid & sink.hit,
                 NextState("RUN")
-            ),
-            mem.source.ready.eq(mem.level >= offset)
+            )
         )
         fsm.act("RUN",
             self.post_hit.eq(1),
+            mem.source.ready.eq(pre_count > offset),
+            If(mem.source.valid & mem.source.ready,
+                NextValue(pre_count, pre_count - 1)
+            ),
             self.flush.eq((length != 0) & (mem.level >= (length - 1))),
             If(mem.level < length,
                 sink.connect(mem.sink, omit={"hit"})

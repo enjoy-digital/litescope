@@ -71,10 +71,44 @@ class TestAnalyzer(unittest.TestCase):
         clocks     = {"sys": 10, "scope": 10}
         run_simulation(dut, generators, clocks, vcd_name=None)
         # Trigger value 0x400 (comfortably after the storage FLUSH window at depth=512) with
-        # offset=8 and subsampling=3: the capture holds the pre-trigger window followed by the
-        # match (0x400 at index 6) and the post-trigger samples.
-        self.assertEqual(dut.data, [1006 + 3*i for i in range(len(dut.data))])
-        self.assertEqual(dut.data.index(0x400), 6)
+        # offset=8 and subsampling=3: the capture holds the 8 pre-trigger samples followed by
+        # the trigger sample (first sample kept from the match on, at index 8) and the
+        # post-trigger samples.
+        self.assertEqual(dut.data, [1002 + 3*i for i in range(len(dut.data))])
+        self.assertTrue(0x400 <= dut.data[8] < 0x400 + 3)
+
+    def test_analyzer_trigger_position(self):
+        # The trigger sample (the sample matching the last term) is at index Offset.
+        def run(offset, length=32, value=200):
+            def generator(dut):
+                yield from dut.analyzer.trigger.mem_value.write(value)
+                yield from dut.analyzer.trigger.mem_mask.write(0xff)
+                yield from dut.analyzer.trigger.mem_write.write(1)
+                yield from dut.analyzer.subsampler.value.write(0)
+                yield from dut.analyzer.storage.length.write(length)
+                yield from dut.analyzer.storage.offset.write(offset)
+                yield from dut.analyzer.storage.enable.write(1)
+                yield from dut.analyzer.trigger.enable.write(1)
+                for i in range(16):
+                    yield
+                while not (yield from dut.analyzer.storage.done.read()):
+                    yield
+                dut.data = (yield from read_capture_words(dut.analyzer, length))
+
+            class DUT(Module):
+                def __init__(self):
+                    counter = Signal(8)
+                    self.sync += counter.eq(counter + 1)
+                    self.submodules.analyzer = LiteScopeAnalyzer(counter, 64, csr_csv=None)
+
+            dut = DUT()
+            run_simulation(dut, {"sys" : [generator(dut)]}, {"sys": 10, "scope": 10})
+            return dut.data
+
+        for offset, length in [(0, 32), (1, 32), (2, 32), (3, 32), (8, 32), (31, 32), (63, 64)]:
+            data = run(offset, length)
+            self.assertEqual(data, [(200 - offset + i) & 0xff for i in range(length)],
+                msg=f"offset={offset}")
 
     def test_analyzer_group_mux(self):
         def generator(dut):
@@ -510,9 +544,9 @@ def _bus_read_samples(dut, count, subwords):
 
 
 class TestAnalyzerWideTrigger(unittest.TestCase):
-    # Locked trigger sample position within the capture for offset=8: the matching sample
-    # lands at index 6.
-    EXPECTED_TRIGGER_INDEX = 6
+    # Trigger sample position within the capture for offset=8: the matching sample lands at
+    # index 8 (Offset pre-trigger samples before it).
+    EXPECTED_TRIGGER_INDEX = 8
 
     def _capture(self, dut, trigger_value, offset=8, length=32, timeout=4096):
         full_mask = 2**128 - 1
