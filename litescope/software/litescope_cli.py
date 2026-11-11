@@ -70,13 +70,13 @@ def add_triggers(args, analyzer, signals, verbose=True):
         added = True
     for signal in args.falling_edge or []:
         name = finder[signal]
-        analyzer.add_falling_edge_trigger(finder[signal])
+        analyzer.add_falling_edge_trigger(name)
         log(f"Falling edge: {name}")
         added = True
     cond = {}
     for signal, value in args.value_trigger or []:
         name = finder[signal]
-        cond[finder[signal]] = value
+        cond[name] = value
         log(f"Condition: {name} == {value}")
     if cond:
         analyzer.add_trigger(cond=cond)
@@ -236,7 +236,6 @@ def _run(args):
     if not os.path.exists(args.csv):
         raise ValueError("{} not found. This is necessary to load the wires which have been tapped to scope."
                          "Try setting --csv to value of the csr_csv argument to LiteScopeAnalyzer in the SoC.".format(args.csv))
-        sys.exit(1)
 
     # If in list mode, list signals and exit.
     if args.list:
