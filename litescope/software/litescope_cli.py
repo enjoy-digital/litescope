@@ -30,6 +30,10 @@ def get_signals(csvname, group, with_width=False):
             t, g, n, v = row[:4] # Extra fields (ex: enum values) are ignored.
             if t == "signal" and g == str(group):
                 signals.append({"name": n, "width": int(v)} if with_width else n)
+    # Every group has at least one signal: no signal means an unknown group (a typo in --group
+    # must not look like an empty group).
+    if not signals:
+        raise ValueError("Group {} not in {}.".format(group, csvname))
     return signals
 
 class Finder:

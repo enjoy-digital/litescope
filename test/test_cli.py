@@ -232,6 +232,18 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["signals"], [{"name": "flag", "width": 1}, {"name": "state", "width": 3}])
 
+    def test_unknown_group(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "Group 5 not in"):
+                self._run_main(tmpdir, "--list", "--group", "5")
+            code, out = self._run_main(tmpdir, "--list", "--group", "5", "--json")
+            self.assertEqual(code, 1)
+            self.assertIn("Group 5 not in", json.loads(out)["error"])
+            code, out = self._run_main(tmpdir, "-r", "flag", "--group", "5", "--json")
+            self.assertEqual(code, 1)
+            self.assertIn("Group 5 not in", json.loads(out)["error"])
+
     def test_json_capture(self):
         import json
         with tempfile.TemporaryDirectory() as tmpdir:
