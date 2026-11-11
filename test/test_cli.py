@@ -89,6 +89,16 @@ class TestCLI(unittest.TestCase):
             f.write("signal,0,state,3\n")
             f.write("signal,1,other,4\n")
 
+    def test_finder(self):
+        finder = litescope_cli.Finder(["main_count", "main_count_en", "ibus_stb"], verbose=False)
+        self.assertEqual(finder["main_count"], "main_count") # Exact.
+        self.assertEqual(finder["stb"], "ibus_stb")          # Substring.
+        with self.assertRaisesRegex(ValueError, "No signal matching"):
+            finder["cpu_ibus"]
+        # A single probe is not returned for a name that does not match it.
+        with self.assertRaisesRegex(ValueError, "No signal matching"):
+            litescope_cli.Finder(["ibus_stb"], verbose=False)["dbus"]
+
     def test_parse_args_accepts_rle(self):
         argv = [
             "litescope_cli",
