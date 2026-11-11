@@ -276,6 +276,16 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(regs.d["analyzer_trigger_enable"].writes,    [0, 1, 0, 1])
         self.assertEqual(regs.d["analyzer_storage_enable"].writes,    [0, 1, 0, 1])
 
+    def test_run_rejects_offset_not_below_length(self):
+        driver, regs = self.make_driver(depth=64)
+
+        for offset, length in [(32, 16), (16, 16)]:
+            with self.assertRaises(AssertionError):
+                driver.run(offset=offset, length=length)
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
+        driver.run(offset=15, length=16)
+        self.assertEqual(regs.d["analyzer_storage_offset"].writes, [15])
+
     def test_multi_group_signal_offsets(self):
         # A signal present in several groups can sit at different positions in each; triggers
         # must resolve it in the currently selected group.
