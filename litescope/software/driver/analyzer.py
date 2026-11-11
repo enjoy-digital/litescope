@@ -173,11 +173,11 @@ class LiteScopeAnalyzerDriver:
                         if c != "x":
                             v |= int(c, 16 if mx is not None else 2 )
                             m |= 0xf if mx is not None else 0b1
-                    value |= self._signal_offset(k)*v
+                    value |= self._signal_mask(k) & (self._signal_offset(k)*v)
                     mask  |= self._signal_mask(k) & (self._signal_offset(k)*m)
                 # Else convert to int
                 else:
-                    value |= self._signal_offset(k)*int(v, 0)
+                    value |= self._signal_mask(k) & (self._signal_offset(k)*int(v, 0))
                     mask  |= self._signal_mask(k)
         self.trigger_terms.append((mask, value))
 
