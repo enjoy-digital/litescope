@@ -167,7 +167,8 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(driver.wide_o,  0x1)
         self.assertEqual(driver.wide_m,  0xff)
         self.assertEqual(regs.d["analyzer_trigger_enable"].writes, [0])
-        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
+        # Not written: clearing it would drain a capture waiting to be uploaded.
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [])
 
     def test_configure_rle(self):
         driver, regs = self.make_driver(data_width=4, storage_width=5, with_rle=True)
@@ -301,7 +302,7 @@ class TestAnalyzerDriver(unittest.TestCase):
         for offset, length in [(32, 16), (16, 16)]:
             with self.assertRaises(AssertionError):
                 driver.run(offset=offset, length=length)
-        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [0])
+        self.assertEqual(regs.d["analyzer_storage_enable"].writes, [])
         driver.run(offset=15, length=16)
         self.assertEqual(regs.d["analyzer_storage_offset"].writes, [15])
 
