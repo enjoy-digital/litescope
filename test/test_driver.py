@@ -216,6 +216,14 @@ class TestAnalyzerDriver(unittest.TestCase):
         self.assertEqual(regs.d["analyzer_trigger_mem_mask"].writes,  [0xb, 0xf0])
         self.assertEqual(regs.d["analyzer_trigger_mem_write"].writes, [1, 1])
 
+    def test_trigger_value_masked_to_signal_width(self):
+        # A value wider than its signal must not spill into the next signal (state, above flag).
+        driver, regs = self.make_driver()
+
+        driver.add_trigger(cond={"flag": "3", "state": "0"})
+        driver.add_trigger(cond={"flag": "0x3", "state": "0b000"})
+        self.assertEqual(driver.trigger_terms, [(0xf, 0x1), (0xf, 0x1)])
+
     def test_edge_trigger_helpers(self):
         driver, regs = self.make_driver()
         self.clear_writes(regs)
