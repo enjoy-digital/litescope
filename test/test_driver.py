@@ -227,6 +227,17 @@ class TestAnalyzerDriver(unittest.TestCase):
         driver.add_falling_edge_trigger("flag")
         self.assertEqual(driver.trigger_terms, [(1, 1), (1, 0)])
 
+    def test_configure_group_rejects_unknown_group(self):
+        driver, regs = self.make_driver()
+        self.clear_writes(regs)
+
+        with self.assertRaises(ValueError):
+            driver.configure_group(2)
+        self.assertEqual(driver.group, 0)
+        self.assertEqual(regs.d["analyzer_mux_value"].writes, [])
+        driver.configure_group(1)
+        self.assertEqual(regs.d["analyzer_mux_value"].writes, [1])
+
     def test_load_checks_memory_full(self):
         driver, regs = self.make_driver()
         regs.d["analyzer_trigger_mem_full"].value = 1
