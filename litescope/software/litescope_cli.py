@@ -156,9 +156,10 @@ def run_gui(args):
         for trigger in triggers:
             trigger_cond[trigger] = dpg.get_value(trigger)
         analyzer.add_trigger(cond=trigger_cond)
+        length = dpg.get_value(item="capture_length")
         analyzer.run(
             offset = int(dpg.get_value(item="capture_offset"), 0),
-            length = int(dpg.get_value(item="capture_length"), 0),
+            length = int(length, 0) if length else None,
         )
         dpg.set_value("capture_status", "Running...")
         analyzer.wait_done()
@@ -175,9 +176,11 @@ def run_gui(args):
     with dpg.window(label="Capture", autosize=True):
         dpg.add_text("Parameters")
         dpg.add_input_text(indent=8, label="Offset",      tag="capture_offset",      default_value=args.offset)
-        dpg.add_input_text(indent=8, label="Length",      tag="capture_length",      default_value="128") # FIXME
-        dpg.add_input_text(indent=8, label="Group",       tag="capture_group",       default_value="0")   # FIXME
-        dpg.add_input_text(indent=8, label="Subsampling", tag="capture_subsampling", default_value="1")   # FIXME
+        # Length: empty for the analyzer depth. Group: read-only, the trigger fields are resolved
+        # for --group.
+        dpg.add_input_text(indent=8, label="Length",      tag="capture_length",      default_value=args.length or "")
+        dpg.add_input_text(indent=8, label="Group",       tag="capture_group",       default_value=str(args.group), readonly=True)
+        dpg.add_input_text(indent=8, label="Subsampling", tag="capture_subsampling", default_value=str(args.subsampling))
         dpg.add_checkbox(  indent=8, label="RLE",         tag="capture_rle",         default_value=args.rle)
         dpg.add_input_text(indent=8, label="Dump",        tag="capture_dump",        default_value=args.dump)
         dpg.add_text("Control/Status")
