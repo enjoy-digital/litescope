@@ -196,6 +196,26 @@ class TestDump(unittest.TestCase):
         CSVDump(dump).write(filename)
         os.remove(filename)
 
+    def test_csv_separators(self):
+        # One "," between fields and none at the end of a row: a CSV reader gets the values as
+        # written (no empty last field, no leading space).
+        import csv
+        capture = Dump()
+        capture.add(DumpVariable("state", 2, [0, 1, 2]))
+        capture.add(DumpVariable("flag",  1, [1, 0, 1]))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, "dump.csv")
+            CSVDump(capture).write(filename)
+            with open(filename, newline="") as f:
+                rows = list(csv.reader(f))
+        self.assertEqual(rows, [
+            ["state", "flag"],
+            ["2",     "1"],
+            ["00",    "1"],
+            ["01",    "0"],
+            ["10",    "1"],
+        ])
+
     def test_py(self):
         filename = "dump.py"
         PythonDump(dump).write(filename)
