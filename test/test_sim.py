@@ -154,8 +154,12 @@ class UARTConsole:
 
 
 class BIOSMemAccess:
-    def __init__(self, console):
-        self.console = console
+    # mem_read dumps bytes (one bus access per byte): copy each 32-bit word to a bounce
+    # buffer with mem_copy first, so registers that pop on read (storage_mem_data) see one
+    # access per word.
+    def __init__(self, console, bounce_addr):
+        self.console     = console
+        self.bounce_addr = bounce_addr
 
     def read(self, addr, length=None, burst="incr"):
         length = 1 if length is None else length
@@ -170,7 +174,8 @@ class BIOSMemAccess:
             self.console.command(f"mem_write 0x{addr + 4*i:08x} 0x{data:08x}")
 
     def _read32(self, addr):
-        response = self.console.command(f"mem_read 0x{addr:08x} 4")
+        self.console.command(f"mem_copy 0x{self.bounce_addr:08x} 0x{addr:08x} 1")
+        response = self.console.command(f"mem_read 0x{self.bounce_addr:08x} 4")
         match = re.search(
             rb"Memory dump:.*?0x[0-9a-fA-F]+\s+((?:[0-9a-fA-F]{2}\s+){4})",
             response,
@@ -179,6 +184,15 @@ class BIOSMemAccess:
             raise ValueError(f"could not parse mem_read response: {response[-500:]!r}")
         data = bytes(int(v, 16) for v in match.group(1).split()[:4])
         return int.from_bytes(data, "little")
+
+
+def get_main_ram_base(csr_csv):
+    with open(csr_csv) as f:
+        for line in f:
+            fields = line.strip().split(",")
+            if fields[:2] == ["memory_region", "main_ram"]:
+                return int(fields[2], 0)
+    raise ValueError("main_ram not found in csr.csv")
 
 
 def wait_analyzer_done(analyzer, timeout=30, message="LiteScope capture did not complete"):
@@ -224,7 +238,7 @@ class TestLiteScopeSim(unittest.TestCase):
                     console = UARTConsole(sock)
                     console.recv_until_prompt(timeout=120)
 
-                    bus = CSRBuilder(BIOSMemAccess(console), csr_csv)
+                    bus = CSRBuilder(BIOSMemAccess(console, get_main_ram_base(csr_csv)), csr_csv)
                     self.assertEqual(bus.regs.ctrl_scratch.read(), 0x12345678)
                     bus.regs.ctrl_scratch.write(0x5aa55aa5)
                     self.assertEqual(bus.regs.ctrl_scratch.read(), 0x5aa55aa5)
@@ -241,11 +255,9 @@ class TestLiteScopeSim(unittest.TestCase):
 
                     data = analyzer.upload()
                     samples = list(data)
-                    self.assertGreaterEqual(len(samples), 8)
-                    self.assertLessEqual(len(samples), 16)
+                    self.assertEqual(len(samples), 16)
                     self.assertEqual(data.width, 32)
-                    self.assertTrue(all(b >= a for a, b in zip(samples, samples[1:])))
-                    self.assertGreater(samples[-1], samples[0])
+                    self.assertEqual(samples, [samples[0] + i for i in range(16)])
 
                     analyzer_rle = LiteScopeAnalyzerDriver(bus.regs, "analyzer_rle", config_csv=analyzer_rle_csv)
                     self.assertEqual(analyzer_rle.data_width, 4)

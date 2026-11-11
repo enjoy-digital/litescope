@@ -330,6 +330,27 @@ class TestAnalyzerDriver(unittest.TestCase):
             (0x1234, 6, "fixed"),
         ])
 
+    def test_upload_reads_configured_length(self):
+        # After done, up to 4 words leave mem_level for the read path: upload must still read
+        # the full capture.
+        mem_data = list(range(16))
+        driver, regs = self.make_driver(data_width=8, mem_level=12, mem_data=mem_data)
+        driver.run(offset=0, length=16)
+
+        data = driver.upload()
+
+        self.assertEqual(list(data), mem_data)
+        self.assertEqual(regs.d["analyzer_storage_mem_data"].readfn_calls, [
+            (0x1234, 16, "fixed"),
+        ])
+
+    def test_get_instant_value_reads_single_sample(self):
+        # A length-1 capture leaves mem_level at 0 once the sample moved to the read path.
+        driver, regs = self.make_driver(data_width=4, mem_level=0, mem_data=[0b0101])
+
+        self.assertEqual(driver.get_instant_value(0, "state"), 0b010)
+        self.assertEqual(regs.d["analyzer_storage_length"].writes, [1])
+
     def test_upload_empty_raw_capture(self):
         driver, regs = self.make_driver(data_width=16, mem_level=0, mem_data=[0x12345678])
 
