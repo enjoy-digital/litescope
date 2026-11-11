@@ -206,6 +206,7 @@ class TestAnalyzerDriver(unittest.TestCase):
         driver.add_trigger(cond={"flag": "1", "state": "0b1x0"})
         self.assertEqual(driver.trigger_terms, [(0xb, 0x9)])
 
+        driver.configure_group(1) # wide is in group 1.
         driver.add_trigger(cond={"wide": "0xax"})
         self.assertEqual(driver.trigger_terms[1], (0xf0, 0xa0))
 
@@ -328,6 +329,22 @@ class TestAnalyzerDriver(unittest.TestCase):
         driver.configure_group(1)
         driver.add_trigger(cond={"shared": "0b101"})
         self.assertEqual(driver.trigger_terms[-1], (0x7, 0x5))
+
+    def test_trigger_rejects_signal_of_another_group(self):
+        # A signal only present in another group must not be resolved at its position there.
+        driver, regs = self.make_driver()
+        driver.configure_group(0)
+        for add in [
+            lambda: driver.add_trigger(cond={"wide": "0x3"}),
+            lambda: driver.add_rising_edge_trigger("wide"),
+            lambda: driver.add_falling_edge_trigger("wide"),
+            ]:
+            with self.assertRaisesRegex(ValueError, "Signal wide not in group 0"):
+                add()
+        self.assertEqual(driver.trigger_terms, [])
+        driver.configure_group(1)
+        driver.add_trigger(cond={"wide": "0x3"})
+        self.assertEqual(driver.trigger_terms, [(0x0f, 0x03)])
 
     def test_configure_subsampler_rejects_invalid_values(self):
         driver, regs = self.make_driver(subsampler_width=4)
