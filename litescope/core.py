@@ -284,6 +284,9 @@ class _Mux(LiteXModule):
         cases = {}
         for i in range(n):
             cases[i] = sinks[i].connect(source)
+        # A value that is not a group (raw register write) selects group 0: with no stream
+        # selected, the capture would never complete.
+        cases["default"] = sinks[0].connect(source)
         self.comb += Case(value, cases)
 
 # LiteScope Analyzer Storage -----------------------------------------------------------------------

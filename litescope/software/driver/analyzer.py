@@ -150,7 +150,7 @@ class LiteScopeAnalyzerDriver:
         return self.signal_masks.get((self.group, name), getattr(self, name + "_m"))
 
     def configure_group(self, value):
-        # The gateware mux has no default case: an unknown group would stall the capture.
+        # An unknown group selects group 0 in the gateware: the capture would not match the layout.
         if value not in self.layouts:
             raise ValueError("Group {} not in analyzer groups {}".format(value, sorted(self.layouts)))
         self.group = value
