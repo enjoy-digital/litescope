@@ -302,6 +302,9 @@ class TestDump(unittest.TestCase):
             self.assertIn("top.state[1:0]", gtkw)
             self.assertIn("top.state_text[31:0]", gtkw)
             self.assertIn("top.flag",       gtkw)
+            # State name trace shown in ASCII (flag 0x800), not in binary (0x28).
+            self.assertIn("@820\ntop.state_text[31:0]", gtkw)
+            self.assertNotIn("@28\n", gtkw)
 
             with open(vcd_filename) as f:
                 vcd = f.read()
