@@ -17,10 +17,11 @@ from litescope.software import litescope_cli
 class FakeBus:
     instances = []
 
-    def __init__(self, host=None, port=None, csr_csv=None):
+    def __init__(self, host=None, port=None, csr_csv=None, raise_on_timeout=False):
         self.host    = host
         self.port    = port
         self.csr_csv = csr_csv
+        self.raise_on_timeout = raise_on_timeout
         self.regs    = object()
         self.opened  = False
         self.closed  = False
@@ -190,6 +191,7 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(FakeBus.instances[0].host, "127.0.0.1")
         self.assertEqual(FakeBus.instances[0].port, "2345")
         self.assertEqual(FakeBus.instances[0].csr_csv, csr_csv)
+        self.assertTrue(FakeBus.instances[0].raise_on_timeout)
         self.assertTrue(FakeBus.instances[0].opened)
         self.assertTrue(FakeBus.instances[0].closed)
         self.assertEqual(len(FakeAnalyzer.instances), 1)
