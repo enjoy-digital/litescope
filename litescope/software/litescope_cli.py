@@ -38,19 +38,20 @@ class Finder:
         self.verbose = verbose
 
     def __getitem__(self, name):
-        scores = {s: 0 for s in self.signals}
         # Exact match
-        if name in scores:
+        if name in self.signals:
             if self.verbose:
                 print("Exact:", name)
             return name
-        # Substring
+        # Substring (regular expression), longest match.
         pattern = re.compile(name)
-        max_score = 0
+        scores  = {}
         for s in self.signals:
             match = pattern.search(s)
             if match:
                 scores[s] = match.end() - match.start()
+        if not scores:
+            raise ValueError(f"No signal matching {name}: {self.signals}")
         max_score = max(scores.values())
         best = list(filter(lambda kv: kv[1] == max_score, scores.items()))
         assert len(best) == 1, f"Found multiple candidates: {best}"
