@@ -581,7 +581,7 @@ class TestAnalyzerDriver(unittest.TestCase):
                 self.assertIn("probe4=state[2]",   metadata)
                 self.assertIn("probe5=scope_clk",  metadata)
                 self.assertIn("probe6=scope_trig", metadata)
-                self.assertIn("samplerate=200.0 MHz", metadata)
+                self.assertIn("samplerate=200 MHz", metadata)
 
     def test_save_vcd_generates_enum_gtkw_filter(self):
         driver, regs = self.make_driver(

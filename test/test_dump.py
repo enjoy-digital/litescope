@@ -219,7 +219,7 @@ class TestDump(unittest.TestCase):
 
                 metadata = sr.read("metadata").decode()
                 self.assertIn("total probes=8",       metadata)
-                self.assertIn("samplerate=250.0 MHz", metadata)
+                self.assertIn("samplerate=250 MHz",   metadata)
                 self.assertIn("unitsize=1",           metadata)
                 self.assertIn("probe1=state[0]",      metadata)
                 self.assertIn("probe2=state[1]",      metadata)
@@ -236,6 +236,29 @@ class TestDump(unittest.TestCase):
                 ("state[1]", 1, [0, 0, 1]),
                 ("flag",     1, [1, 0, 1]),
             ])
+
+    def test_sigrok_samplerate(self):
+        # Written in the largest unit giving a whole number (not rounded down to MHz) and read
+        # back; the metadata rate is twice the sample rate (each sample is written twice).
+        for samplerate, text in [
+            (125e6,   "250 MHz"),
+            (100e3,   "200 kHz"),
+            (1.5e6,   "3 MHz"),
+            (12.5e6,  "25 MHz"),
+            (2.5e3,   "5 kHz"),
+            (100e6/3, "66666667 Hz"),
+            (1e9,     "2 GHz"),
+        ]:
+            capture = Dump()
+            capture.add(DumpVariable("flag", 1, [1, 0, 1]))
+            with tempfile.TemporaryDirectory() as tmpdir:
+                filename = os.path.join(tmpdir, "dump.sr")
+                SigrokDump(capture, samplerate=samplerate).write(filename)
+                with zipfile.ZipFile(filename) as sr:
+                    self.assertIn("samplerate={}\n".format(text), sr.read("metadata").decode())
+                loaded = SigrokDump()
+                loaded.read(filename)
+                self.assertAlmostEqual(loaded.samplerate, 2*samplerate, delta=1)
 
     def test_sigrok_keeps_directory_named_after_file(self):
         capture = Dump()
