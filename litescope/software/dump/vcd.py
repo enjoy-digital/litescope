@@ -51,6 +51,13 @@ class VCDDump(Dump):
         timescale_seconds, si_prefix = _timescale_str2num(timescale)
         # factor of 2 scale is because of 2x samples from fake clock
         self.count_timescale = int(1 / (timescale_seconds * samplerate * 2))
+        # Use a smaller unit when the half sample period is below 100 units: the count would be
+        # truncated (to 0 above 500 GHz with 1ps, the analyzer's default samplerate of 1e12).
+        prefixes = sorted(_si_prefix2exp, key=lambda p: -_si_prefix2exp[p])
+        while (self.count_timescale < 100) and (si_prefix != prefixes[-1]):
+            si_prefix = prefixes[prefixes.index(si_prefix) + 1]
+            timescale_seconds = 10**_si_prefix2exp[si_prefix]
+            self.count_timescale = int(1 / (timescale_seconds * samplerate * 2))
         self.timescale_unit_str = si_prefix + "s"
 
     def change(self):

@@ -242,6 +242,15 @@ class TestDump(unittest.TestCase):
         VCDDump(dump).write(filename)
         os.remove(filename)
 
+    def test_vcd_timescale(self):
+        # Half sample period (each sample is written twice).
+        for samplerate, timescale in [
+            (100e6, "$timescale 5000ps $end\n"),
+            (1e9,   "$timescale 500ps $end\n"),
+            (1e12,  "$timescale 500fs $end\n"), # LiteScopeAnalyzer default samplerate.
+        ]:
+            self.assertEqual(VCDDump(samplerate=samplerate).generate_timescale(), timescale)
+
     def test_vcd_gtkw(self):
         capture = Dump()
         capture.add(DumpVariable("state", 2, [0, 1, 2], enum={
