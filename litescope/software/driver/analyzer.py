@@ -194,8 +194,8 @@ class LiteScopeAnalyzerDriver:
         # Disarm the trigger; the gateware flushes any leftover terms (previous capture,
         # aborted sequence) on the falling edge of enable.
         self.trigger_enable.write(0)
-        # The flush window is 2*trigger_depth scope cycles; any CSR access takes far longer,
-        # but poll done (trigger memory empty) so the reload below cannot race the flush.
+        # The flush lasts until the term memory is empty: poll done (trigger memory empty) so
+        # that the reload below cannot race the flush.
         deadline = time.time() + timeout
         for _ in range(2):
             while not self.trigger_done.read():
