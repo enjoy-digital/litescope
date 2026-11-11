@@ -6,8 +6,8 @@
 
 import os
 import math
-import shutil
 import zipfile
+import tempfile
 import re
 from collections import OrderedDict
 
@@ -73,33 +73,24 @@ unitsize={}
             f.write(data.to_bytes(data_bits//8, "little"))
         f.close()
 
-    def zip(self, name):
-        f = zipfile.ZipFile(name + ".sr", "w")
-        for filename in ["version", "metadata", "logic-1-1"]:
-            f.write(os.path.join(name, filename), arcname=filename)
+    def zip(self, path, filename):
+        f = zipfile.ZipFile(filename, "w")
+        for name in ["version", "metadata", "logic-1-1"]:
+            f.write(os.path.join(path, name), arcname=name)
         f.close()
 
     def write(self, filename):
-        name, ext = os.path.splitext(filename)
-        if os.path.exists(name):
-            shutil.rmtree(name)
-        os.makedirs(name)
-        self.write_version(name)
-        self.write_metadata(name)
-        self.write_data(name)
-        self.zip(name)
-        shutil.rmtree(name)
+        # Build the session in a temporary directory (not a directory named after the file, that
+        # would be removed if it exists).
+        with tempfile.TemporaryDirectory() as path:
+            self.write_version(path)
+            self.write_metadata(path)
+            self.write_data(path)
+            self.zip(path, filename)
 
-    def unzip(self, filename, name):
-        f = open(filename, "rb")
-        z = zipfile.ZipFile(f)
-        if os.path.exists(name):
-            shutil.rmtree(name)
-            os.makedirs(name)
-        else:
-            os.makedirs(name)
-        z.extractall(name)
-        f.close()
+    def unzip(self, filename, path):
+        with zipfile.ZipFile(filename) as z:
+            z.extractall(path)
 
     def read_metadata(self, path):
         probes = OrderedDict()
@@ -133,11 +124,10 @@ unitsize={}
 
     def read(self, filename):
         self.variables = []
-        name, ext = os.path.splitext(filename)
-        self.unzip(filename, name)
-        probes = self.read_metadata(name)
-        datas = self.read_data(name, len(probes.keys()))
-        shutil.rmtree(name)
+        with tempfile.TemporaryDirectory() as path:
+            self.unzip(filename, path)
+            probes = self.read_metadata(path)
+            datas  = self.read_data(path, len(probes.keys()))
 
         for k, v in probes.items():
             probe_data = []
