@@ -113,7 +113,8 @@ class Dump:
         self.add(DumpVariable("scope_clk", 1, [1, 0]*(len(self)//2)))
 
     def add_scope_trig(self, offset):
-        self.add(DumpVariable("scope_trig", 1, [0]*offset + [1]*(len(self)-offset)))
+        # Offset is a sample index: each sample is written twice (one scope_clk period).
+        self.add(DumpVariable("scope_trig", 1, [0]*(2*offset) + [1]*(len(self)-2*offset)))
 
     def __len__(self):
         l = 0
