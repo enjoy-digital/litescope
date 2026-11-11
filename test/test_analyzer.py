@@ -73,8 +73,9 @@ class TestAnalyzer(unittest.TestCase):
         # Trigger value 0x400 (comfortably after the storage FLUSH window at depth=512) with
         # offset=8 and subsampling=3: the capture holds the 8 pre-trigger samples followed by
         # the trigger sample (first sample kept from the match on, at index 8) and the
-        # post-trigger samples.
-        self.assertEqual(dut.data, [1002 + 3*i for i in range(len(dut.data))])
+        # post-trigger samples. The subsampling phase follows the end of the FLUSH (the trigger
+        # and the subsampler only see samples from then on), not the counter.
+        self.assertEqual(dut.data, [dut.data[0] + 3*i for i in range(len(dut.data))])
         self.assertTrue(0x400 <= dut.data[8] < 0x400 + 3)
 
     def test_analyzer_trigger_position(self):
@@ -109,6 +110,41 @@ class TestAnalyzer(unittest.TestCase):
             data = run(offset, length)
             self.assertEqual(data, [(200 - offset + i) & 0xff for i in range(length)],
                 msg=f"offset={offset}")
+
+    def test_analyzer_trigger_match_during_flush(self):
+        # The trigger is armed right after the storage, before its FLUSH ends: a match during
+        # FLUSH must not fire the trigger. The capture is taken around the next match instead
+        # (the 8-bit counter wraps), with the matching sample at index Offset.
+        def run(value, offset=8, length=32):
+            def generator(dut):
+                yield from dut.analyzer.trigger.mem_value.write(value)
+                yield from dut.analyzer.trigger.mem_mask.write(0xff)
+                yield from dut.analyzer.trigger.mem_write.write(1)
+                yield from dut.analyzer.subsampler.value.write(0)
+                yield from dut.analyzer.storage.length.write(length)
+                yield from dut.analyzer.storage.offset.write(offset)
+                yield from dut.analyzer.storage.enable.write(1)
+                yield from dut.analyzer.trigger.enable.write(1)
+                for i in range(16):
+                    yield
+                while not (yield from dut.analyzer.storage.done.read()):
+                    yield
+                dut.data = (yield from read_capture_words(dut.analyzer, length))
+
+            class DUT(Module):
+                def __init__(self):
+                    counter = Signal(8)
+                    self.sync += counter.eq(counter + 1)
+                    self.submodules.analyzer = LiteScopeAnalyzer(counter, 64, csr_csv=None)
+
+            dut = DUT()
+            run_simulation(dut, {"sys" : [generator(dut)]}, {"sys": 10, "scope": 10})
+            return dut.data
+
+        # FLUSH lasts 64 cycles from the arming (counter about 8 to 72).
+        for value in [30, 60]:
+            data = run(value)
+            self.assertEqual(data, [(value - 8 + i) & 0xff for i in range(32)], msg=f"value={value}")
 
     def test_analyzer_group_mux(self):
         def generator(dut):
