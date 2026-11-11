@@ -629,6 +629,17 @@ class TestAnalyzerDriver(unittest.TestCase):
             self.assertIn("b01010010010101010100111000100000", vcd) # RUN.
             self.assertIn("b01000100010011110100111001000101", vcd) # DONE.
 
+    def test_save_without_configure_subsampler(self):
+        # save() must not need configure_subsampler() first (subsampling defaults to 1).
+        driver, regs = self.make_driver(data_width=4)
+        driver.data = DumpData(4)
+        driver.data.extend([0b1001, 0b0010])
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, "capture.vcd")
+            driver.save(filename)
+            with open(filename) as f:
+                self.assertIn("$timescale 5000ps $end", f.read())
+
     def test_upload_decodes_wide_rle_storage_words(self):
         mem_data = [
             0x11111111, 0x00000000,

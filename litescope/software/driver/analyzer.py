@@ -66,6 +66,7 @@ class LiteScopeAnalyzerDriver:
         self.build()
         self.group = 0
         self.rle_enabled = False
+        self.subsampling = 1
         self.data = DumpData(self.data_width)
 
         self.offset = 0
