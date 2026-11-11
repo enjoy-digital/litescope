@@ -25,8 +25,9 @@ of components used in today's SoC such as Ethernet, SATA, PCIe, SDRAM Controller
 
 Using Migen to describe the HDL allows the core to be highly and easily configurable.
 
-LiteScope can be used as LiteX library or can be integrated with your standard
-design flow by generating the verilog rtl that you will use as a standard core.
+LiteScope is used as a LiteX library: the analyzer is instantiated in a LiteX/Migen design
+and controlled from the host through a LiteX bridge (no standalone Verilog generator is
+provided).
 
 [> Features
 -----------
