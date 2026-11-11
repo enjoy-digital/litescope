@@ -315,6 +315,73 @@ class TestAnalyzer(unittest.TestCase):
             self.assertEqual([n for v, n in runs[1:-1]], [2**shift]*(len(runs) - 2),
                 msg=f"runs of {2**shift} with rle_length {rle_length}: {runs}")
 
+    def test_analyzer_rle_subsampling_and_single_samples(self):
+        # RLE with subsampling must complete (the RLE must not wait on a subsampler that only
+        # advances when the RLE accepts) and a single-sample value right after a run must be kept.
+        def run(pattern, subsampling, rle_length=8, length=64, timeout=20000):
+            def generator(dut):
+                dut.done = False
+                yield from dut.analyzer.trigger.mem_value.write(0)
+                yield from dut.analyzer.trigger.mem_mask.write(0)
+                yield from dut.analyzer.trigger.mem_write.write(1)
+                yield from dut.analyzer.rle.enable.write(1)
+                yield from dut.analyzer.subsampler.value.write(subsampling - 1)
+                yield from dut.analyzer.storage.length.write(length)
+                yield from dut.analyzer.storage.offset.write(0)
+                yield from dut.analyzer.storage.enable.write(1)
+                yield from dut.analyzer.trigger.enable.write(1)
+                for i in range(16):
+                    yield
+                for i in range(timeout):
+                    if (yield from dut.analyzer.storage.done.read()):
+                        dut.done = True
+                        break
+                    yield
+                if dut.done:
+                    dut.data = (yield from read_capture_words(dut.analyzer, length))
+
+            class DUT(Module):
+                def __init__(self):
+                    index = Signal(max=len(pattern))
+                    probe = Signal(4)
+                    self.sync += If(index == len(pattern) - 1,
+                        index.eq(0)
+                    ).Else(
+                        index.eq(index + 1)
+                    )
+                    self.comb += Case(index, {i: probe.eq(v) for i, v in enumerate(pattern)})
+                    self.submodules.analyzer = LiteScopeAnalyzer(probe, length,
+                        with_rle   = True,
+                        rle_length = rle_length,
+                        csr_csv    = None)
+
+            dut = DUT()
+            run_simulation(dut, {"sys" : [generator(dut)]}, {"sys": 10, "scope": 10})
+            self.assertTrue(dut.done, msg=f"capture not done (subsampling {subsampling})")
+            encoded = DumpData(dut.analyzer.storage_width)
+            encoded.extend(dut.data)
+            decoded = list(encoded.decode_rle(data_width=dut.analyzer.data_width))
+            runs = []
+            for sample in decoded:
+                if runs and runs[-1][0] == sample:
+                    runs[-1][1] += 1
+                else:
+                    runs.append([sample, 1])
+            return runs
+
+        # Runs of 12 cycles subsampled by 3: runs of 4 samples (first/last cut by the window).
+        runs = run([0]*12 + [1]*12 + [2]*12 + [3]*12, subsampling=3)
+        self.assertGreater(len(runs), 3)
+        self.assertEqual([n for v, n in runs[1:-1]], [4]*(len(runs) - 2), msg=f"{runs}")
+        self.assertTrue(all(b == (a + 1) % 4 for (a, _), (b, _) in zip(runs, runs[1:])), msg=f"{runs}")
+
+        # A run then single-sample values: every value is kept, in order.
+        runs = run([0, 0, 0, 0, 1, 2, 3], subsampling=1)
+        self.assertGreater(len(runs), 8)
+        self.assertTrue(all(b == (a + 1) % 4 for (a, _), (b, _) in zip(runs, runs[1:])), msg=f"{runs}")
+        self.assertEqual([n for v, n in runs[1:-1]], [{0: 4}.get(v, 1) for v, n in runs[1:-1]],
+            msg=f"{runs}")
+
     def test_analyzer_rle_disabled_keeps_raw_capture(self):
         def generator(dut):
             yield from dut.analyzer.trigger.mem_value.write(0)
