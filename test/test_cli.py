@@ -206,6 +206,42 @@ class TestCLI(unittest.TestCase):
             ("save", args.dump),
         ])
 
+    def test_run_batch_name_and_single_lookup(self):
+        # --name sets the analyzer name (register prefix) independently of the --csv file name;
+        # each signal is looked up once ("Exact: ..." printed once).
+        FakeBus.instances = []
+        FakeAnalyzer.instances = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            csvname = os.path.join(tmpdir, "renamed.csv")
+            self.write_csv(csvname)
+            args = type("Args", (), {
+                "host"          : "127.0.0.1",
+                "port"          : "2345",
+                "csr_csv"       : csvname,
+                "csv"           : csvname,
+                "name"          : "analyzer",
+                "group"         : 0,
+                "subsampling"   : 1,
+                "rle"           : False,
+                "rising_edge"   : None,
+                "falling_edge"  : ["state"],
+                "value_trigger" : [("flag", "1")],
+                "offset"        : "0",
+                "length"        : None,
+                "dump"          : os.path.join(tmpdir, "dump.vcd"),
+            })()
+            stdout = io.StringIO()
+            with mock.patch.object(litescope_cli, "RemoteClient", FakeBus), \
+                 mock.patch.object(litescope_cli, "LiteScopeAnalyzerDriver", FakeAnalyzer), \
+                 mock.patch("sys.stdout", stdout):
+                litescope_cli.run_batch(args)
+                args.name = None
+                litescope_cli.run_batch(args)
+        self.assertEqual(FakeAnalyzer.instances[0].name, "analyzer")
+        self.assertEqual(FakeAnalyzer.instances[1].name, "renamed")
+        self.assertEqual(stdout.getvalue().count("Exact: state"), 2) # Once per run.
+        self.assertEqual(stdout.getvalue().count("Exact: flag"),  2)
+
     def _run_main(self, tmpdir, *extra, fires=True):
         csvname = os.path.join(tmpdir, "analyzer.csv")
         csr_csv = os.path.join(tmpdir, "csr.csv")

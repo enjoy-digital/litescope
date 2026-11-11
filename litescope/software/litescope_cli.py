@@ -85,13 +85,20 @@ def add_triggers(args, analyzer, signals, verbose=True):
 
 # Run Batch/GUI  -----------------------------------------------------------------------------------
 
+def get_name(args):
+    # Name of the analyzer in the SoC (prefix of its registers): --name, else the --csv basename.
+    name = getattr(args, "name", None)
+    if name is None:
+        name = os.path.splitext(os.path.basename(args.csv))[0]
+    return name
+
 def run_batch(args):
     json_output = getattr(args, "json",    False)
     timeout     = getattr(args, "timeout", None)
     bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
     bus.open()
 
-    basename = os.path.splitext(os.path.basename(args.csv))[0]
+    basename = get_name(args)
     signals  = get_signals(args.csv, args.group)
     result   = {"schema": 1, "group": args.group, "triggered": False}
 
@@ -141,8 +148,7 @@ def run_gui(args):
     triggers = get_signals(args.csv, args.group)
 
     def capture_callback():
-        basename = os.path.splitext(os.path.basename(args.csv))[0]
-        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
+        analyzer = LiteScopeAnalyzerDriver(bus.regs, get_name(args), config_csv=args.csv, debug=True)
         analyzer.configure_group(int(dpg.get_value(item="capture_group"), 0))
         analyzer.configure_subsampler(int(dpg.get_value(item="capture_subsampling"), 0))
         analyzer.configure_rle(dpg.get_value(item="capture_rle"))
@@ -218,6 +224,7 @@ def parse_args():
     parser.add_argument("--port",                default="1234",           help="Host bind port.")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file.")
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
+    parser.add_argument("--name",                default=None,             help="Analyzer name in the SoC (register prefix); default is the --csv basename.")
     parser.add_argument("--group",               default=0, type=int,      help="Capture group to use from analyzer.csv.")
     parser.add_argument("--subsampling",         default=1, type=int,      help="Keep one sample every N scope clock cycles.")
     parser.add_argument("--rle",                 action="store_true",      help="Enable analyzer run-length encoding.")
