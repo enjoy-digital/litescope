@@ -90,3 +90,4 @@ ENV/
 
 # Simulation dumps
 *.vcd
+!doc/diagrams/captures/*.vcd

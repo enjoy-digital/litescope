@@ -1,0 +1,25 @@
+# Manual of this project: output name and chapters, in order (read by build.py; the pandoc defaults
+# files and the theme are generic, from the manual kit).
+name: litescope_manual
+chapters:
+  - 00_front.md
+  - 01_introduction.md
+  - 02_logic_analysis_primer.md
+  - 03_analyzer_architecture.md
+  - 04_trigger.md
+  - 05_subsampler_rle.md
+  - 06_storage.md
+  - 07_io_probe.md
+  - 08_getting_started.md
+  - 09_integration.md
+  - 10_host_tools.md
+  - 11_file_formats.md
+  - 12_examples.md
+  - 13_simulation.md
+  - 14_debugging.md
+  - Z_appendix.md
+  - A_registers.md
+  - B_build_options.md
+  - C_glossary.md
+  - D_performance.md
+  - E_maintenance.md
