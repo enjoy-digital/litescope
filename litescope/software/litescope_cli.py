@@ -30,6 +30,10 @@ def get_signals(csvname, group, with_width=False):
             t, g, n, v = row[:4] # Extra fields (ex: enum values) are ignored.
             if t == "signal" and g == str(group):
                 signals.append({"name": n, "width": int(v)} if with_width else n)
+    # Every group has at least one signal: no signal means an unknown group (a typo in --group
+    # must not look like an empty group).
+    if not signals:
+        raise ValueError("Group {} not in {}.".format(group, csvname))
     return signals
 
 class Finder:
@@ -88,7 +92,8 @@ def add_triggers(args, analyzer, signals, verbose=True):
 def run_batch(args):
     json_output = getattr(args, "json",    False)
     timeout     = getattr(args, "timeout", None)
-    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
+    # Raise on read timeouts (instead of returning zeros, that would look like a capture).
+    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv, raise_on_timeout=True)
     bus.open()
 
     basename = os.path.splitext(os.path.basename(args.csv))[0]
@@ -135,7 +140,7 @@ def run_batch(args):
 def run_gui(args):
     import dearpygui.dearpygui as dpg
 
-    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv)
+    bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv, raise_on_timeout=True)
     bus.open()
 
     triggers = get_signals(args.csv, args.group)

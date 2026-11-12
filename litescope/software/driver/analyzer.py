@@ -144,11 +144,20 @@ class LiteScopeAnalyzerDriver:
             print(f"{self.name}: warning: signal '{name}' is present in several groups at "
                    "different positions; triggers resolve it in the selected group.")
 
+    def _check_signal(self, name):
+        # A signal missing from the selected group must not resolve to its position in another
+        # group (the trigger would compare bits of an unrelated signal).
+        if (self.group, name) not in self.signal_offsets:
+            signals = [n for n, _ in self.layouts.get(self.group, [])]
+            raise ValueError("Signal {} not in group {}: {}".format(name, self.group, signals))
+
     def _signal_offset(self, name):
-        return self.signal_offsets.get((self.group, name), getattr(self, name + "_o"))
+        self._check_signal(name)
+        return self.signal_offsets[(self.group, name)]
 
     def _signal_mask(self, name):
-        return self.signal_masks.get((self.group, name), getattr(self, name + "_m"))
+        self._check_signal(name)
+        return self.signal_masks[(self.group, name)]
 
     def configure_group(self, value):
         # The gateware mux has no default case: an unknown group would stall the capture.

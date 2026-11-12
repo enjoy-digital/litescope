@@ -17,10 +17,11 @@ from litescope.software import litescope_cli
 class FakeBus:
     instances = []
 
-    def __init__(self, host=None, port=None, csr_csv=None):
+    def __init__(self, host=None, port=None, csr_csv=None, raise_on_timeout=False):
         self.host    = host
         self.port    = port
         self.csr_csv = csr_csv
+        self.raise_on_timeout = raise_on_timeout
         self.regs    = object()
         self.opened  = False
         self.closed  = False
@@ -190,6 +191,7 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(FakeBus.instances[0].host, "127.0.0.1")
         self.assertEqual(FakeBus.instances[0].port, "2345")
         self.assertEqual(FakeBus.instances[0].csr_csv, csr_csv)
+        self.assertTrue(FakeBus.instances[0].raise_on_timeout)
         self.assertTrue(FakeBus.instances[0].opened)
         self.assertTrue(FakeBus.instances[0].closed)
         self.assertEqual(len(FakeAnalyzer.instances), 1)
@@ -231,6 +233,18 @@ class TestCLI(unittest.TestCase):
             code, out = self._run_main(tmpdir, "--list", "--json")
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["signals"], [{"name": "flag", "width": 1}, {"name": "state", "width": 3}])
+
+    def test_unknown_group(self):
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "Group 5 not in"):
+                self._run_main(tmpdir, "--list", "--group", "5")
+            code, out = self._run_main(tmpdir, "--list", "--group", "5", "--json")
+            self.assertEqual(code, 1)
+            self.assertIn("Group 5 not in", json.loads(out)["error"])
+            code, out = self._run_main(tmpdir, "-r", "flag", "--group", "5", "--json")
+            self.assertEqual(code, 1)
+            self.assertIn("Group 5 not in", json.loads(out)["error"])
 
     def test_json_capture(self):
         import json
