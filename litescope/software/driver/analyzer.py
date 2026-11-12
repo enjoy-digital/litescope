@@ -75,9 +75,10 @@ class LiteScopeAnalyzerDriver:
         # the trigger memory consumes its terms on every capture.
         self.trigger_terms = []
 
-        # Disable trigger and storage
+        # Disable trigger. Leave the storage enable as is: with it cleared, the storage drains its
+        # memory through the read path and a capture still waiting to be uploaded (taken by
+        # another script, before a reconnection) would be lost. run() and clear() write it.
         self.trigger_enable.write(0)
-        self.storage_enable.write(0)
         if hasattr(self, "rle_enable"):
             self.rle_enable.write(0)
 

@@ -495,6 +495,55 @@ class TestAnalyzer(unittest.TestCase):
         self.assertEqual(dut.analyzer.storage_width, 9)
         self.assertEqual(dut.data, list(range(dut.data[0], dut.data[0] + len(dut.data))))
 
+    def test_analyzer_done_drops_on_arming(self):
+        # Done reads 0 from the arming on (also with a slower scope clock and Enable cleared
+        # for a single write, as run() does), so that a wait for Done does not return before
+        # the capture has started.
+        def generator(dut):
+            dut.done_reads = []
+            dut.captures   = []
+            for capture in range(2):
+                yield from dut.analyzer.trigger.mem_value.write(0)
+                yield from dut.analyzer.trigger.mem_mask.write(0)
+                yield from dut.analyzer.trigger.mem_write.write(1)
+                yield from dut.analyzer.subsampler.value.write(0)
+                yield from dut.analyzer.storage.length.write(8)
+                yield from dut.analyzer.storage.offset.write(0)
+                yield from dut.analyzer.storage.enable.write(0)
+                yield from dut.analyzer.storage.enable.write(1)
+                yield from dut.analyzer.trigger.enable.write(1)
+                reads = []
+                for i in range(1000):
+                    done = (yield from dut.analyzer.storage.done.read())
+                    reads.append(done)
+                    if done:
+                        break
+                dut.done_reads.append(reads)
+                data = []
+                for i in range(8):
+                    for j in range(16): # Let the read path (CDC) refill with a slow scope clock.
+                        yield
+                    data.append((yield from dut.analyzer.storage.mem_data.read()))
+                dut.captures.append(data)
+                yield from dut.analyzer.trigger.enable.write(0)
+                for i in range(64):
+                    yield
+
+        class DUT(Module):
+            def __init__(self):
+                counter = Signal(8)
+                self.sync.scope += counter.eq(counter + 1)
+                self.submodules.analyzer = LiteScopeAnalyzer(counter, 16, csr_csv=None)
+
+        for scope_period in [10, 40]:
+            dut = DUT()
+            run_simulation(dut, {"sys": [generator(dut)]}, {"sys": 10, "scope": scope_period})
+            for reads, data in zip(dut.done_reads, dut.captures):
+                msg = f"scope_period={scope_period}"
+                self.assertEqual(reads[0], 0, msg=msg)
+                self.assertEqual(reads[-1], 1, msg=msg)
+                self.assertEqual(data, [(data[0] + i) & 0xff for i in range(8)], msg=msg)
+
     def test_format_groups_splits_records_and_deduplicates(self):
         signal = Signal(1)
         record = Record([("field0", 3), ("field1", 5)])
