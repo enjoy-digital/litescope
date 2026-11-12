@@ -32,7 +32,7 @@ BANKS = [
 # elaborated registers before the dump; a description declared in the gateware takes precedence.
 # Keys: (bank, register). The IO probe registers carry the descriptions of the LiteX GPIOInOut.
 DESCRIPTIONS = {
-    ("analyzer", "mux_value")         : "Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group.",
+    ("analyzer", "mux_value")         : "Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group. A value that is no group selects group 0.",
     ("analyzer", "trigger_enable")    : "1: arm the trigger, a term is consumed on each match. The falling edge flushes the terms left in the term memory.",
     ("analyzer", "trigger_done")      : "1: term memory empty, every term matched or flushed (also 1 with no term loaded).",
     ("analyzer", "trigger_mem_write") : "Write: push the term (`trigger_mem_mask`, `trigger_mem_value`) into the term memory.",
@@ -42,9 +42,9 @@ DESCRIPTIONS = {
     ("analyzer", "subsampler_value")  : "Subsampling factor minus one: one sample is kept every `value + 1` cycles, `subsampler_width` bits.",
     ("analyzer", "rle_enable")        : "1: run-length encode the samples from the trigger on. Only with `with_rle=True`.",
     ("analyzer", "storage_enable")    : "Rising edge: flush the storage and start a capture. Keep at 1 while reading `storage_mem_data`.",
-    ("analyzer", "storage_done")      : "1: storage idle, capture complete or never started.",
+    ("analyzer", "storage_done")      : "1: storage idle, capture complete or never started. Reads 0 from the rising edge of `storage_enable` on.",
     ("analyzer", "storage_length")    : "Words of the capture, pre-trigger window included, `bits_for(depth)` bits; at most `depth`.",
-    ("analyzer", "storage_offset")    : "Pre-trigger window in words, `bits_for(depth)` bits; below `depth`.",
+    ("analyzer", "storage_offset")    : "Pre-trigger window in words, `bits_for(depth)` bits; below `storage_length`. The trigger sample is at index `offset` of the capture.",
     ("analyzer", "storage_mem_level") : "Words still in the storage memory, `bits_for(depth)` bits; read it once `storage_done` is 1. The last words of a capture, up to four, have then moved to the read path and are not counted.",
     ("analyzer", "storage_mem_data")  : "Read port: next 32-bit sub-word of the capture, least significant first; each read pops it.",
 }

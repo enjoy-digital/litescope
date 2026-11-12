@@ -5,8 +5,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # Sample doubling in the dumps: each uploaded sample takes two time steps, scope_clk is 1 then 0
-# within a sample, and scope_trig rises at time step `offset` (here offset 2, sample 1). Same data
-# as the VCD excerpt of the File formats chapter (flag, count, four samples).
+# within a sample, and scope_trig rises at time step `2*offset`, at sample `offset` (here 2). Same
+# data as the VCD excerpt of the File formats chapter (flag, count, four samples).
 
 from svgdiag import *
 
@@ -44,9 +44,9 @@ def build():
     row_name(d, x0, 165, "scope_clk")
     wave(d, x0, 165, p, [1, 0]*4)
     row_name(d, x0, 210, "scope_trig")
-    wave(d, x0, 210, p, [0, 0, 1, 1, 1, 1, 1, 1])
-    d.add(Arrow((x0, 255), (x0 + 2*p, 255), kind="control", heads="both", label="offset = 2 steps",
-        label_side="below"))
-    for x in (x0 + 2*p,):
+    wave(d, x0, 210, p, [0, 0, 0, 0, 1, 1, 1, 1])
+    d.add(Arrow((x0, 255), (x0 + 4*p, 255), kind="control", heads="both",
+        label="offset = 2 samples", label_side="below"))
+    for x in (x0 + 4*p,):
         d.add(Bus([(x, 222), (x, 245)], dash="2,3", color="#9a9a9a"))
     return d

@@ -25,8 +25,10 @@ on to the storage and the counter restarts from 0. The driver writes N - 1, so N
 sample.
 
 `configure_subsampler(N)` accepts N from 1 to `2**subsampler_width`, 65536 with the default
-width of 16 bits, and raises an error outside this range. The counter runs freely: the kept
-cycles are not aligned on the arming of the capture or on the trigger.
+width of 16 bits, and raises an error outside this range. The counter advances on the samples
+that the trigger passes on, which flow only while the storage is armed, from the end of its flush
+on. It is not reset at the arming, so the kept cycles are not aligned on the arming or on the
+trigger.
 
 The subsampler sits after the trigger, so the trigger compares every cycle. A short event
 can fire the trigger and yet be missing from the capture, because the cycle that carried it
@@ -36,12 +38,10 @@ A capture of `length` samples covers `length` x N cycles of the scope clock. For
 samples with N = 512 at 125 MHz (8 ns) cover 16.8 ms. The pre-trigger window, `offset`, also
 counts kept samples.
 
-Do not combine the subsampler with the RLE: with the RLE enabled and N above 1, the capture never
-completes ([Limitation: lost samples and subsampling](#rle-limitation)).
+The subsampler and the RLE combine: the encoder then compresses the kept samples.
 
 The driver records N, and `save()` divides the sample rate of `analyzer.csv` by it to time the
-dumps. `save()` reads the recorded N, so call `configure_subsampler()` before saving, even with
-N = 1.
+dumps. N is 1 until `configure_subsampler()` is called.
 
 ## Run-length encoding {#rle}
 
@@ -73,18 +73,24 @@ memory even in the captures that leave the RLE disabled.
 
 ### Encoder state machine {#rle-fsm}
 
-The encoder is a state machine of three states, shown in the figure below. BYPASS passes the
-samples unchanged. RUN compares each sample with the last one stored and counts the repeats. A
-new value is stored raw at once when no repeat is pending. When a new value ends a run, RUN stores
-the repeat word and EMIT_RAW stores the new value on the next cycle.
+The encoder is a state machine of two states, shown in the figure below. BYPASS passes the
+samples unchanged. RUN takes one sample on every cycle, compares it with the last one seen and
+counts the repeats. A new value is stored raw at once when no repeat is pending. When a new value
+ends a run, RUN stores the repeat word and keeps the new value in a pending register, which it
+stores on the next cycle.
 
 ![RLE state machine. Follow a run: BYPASS enters RUN after the trigger; in RUN each identical
-sample adds one to the count; a new value after a run emits the repeat word, then EMIT_RAW
-stores the new value and returns to RUN.](rle_fsm.svg)
+sample adds one to the count; a new value after a run emits the repeat word, and the new value,
+held in the pending register, is stored on the next cycle.](rle_fsm.svg)
+
+RUN stores at most one word per cycle. The pending value never waits longer than one cycle: a run
+grows only on cycles that store nothing, so the register is free again when the next run ends. No
+sample is dropped.
 
 RUN also emits a repeat word in two other cases. When the count reaches `rle_length - 1`, the
-word is stored and a new count starts. When the storage is one word from the capture length, the
-pending count is stored, so the end of a run is not lost when the capture stops.
+word is stored and the sample of that cycle starts a new count. When the storage is one word from
+the capture length, the pending count is stored, so the end of a run is not lost when the capture
+stops; this last word ends the capture.
 
 The encoder works only while the storage is in its post-trigger phase. The pre-trigger window and
 the first samples after the trigger are stored raw. At the end of the capture, the state machine
@@ -110,25 +116,6 @@ returns the raw samples.
 
 `configure_rle(True)` raises an error when `analyzer.csv` reports an analyzer without RLE. The
 setting stays until `configure_rle(False)` or `clear()`.
-
-### Limitation: lost samples and subsampling {#rle-limitation}
-
-The encoder stores at most one word per cycle and cannot hold back the samples. Three cases store
-a word without taking a new sample: EMIT_RAW after a run ended, a repeat word emitted because the
-count is full, and the repeat word stored at the end of the capture. The stream ahead of the
-encoder does not wait, so the sample of that cycle is dropped.
-
-The decoded capture is therefore shorter than the time it covers: each case above removes one
-sample. The removed sample can be a value of its own: a value that lasts one sample right after
-the end of a run is missing from the capture. Read an RLE capture as an approximate view of the
-sequence of values, and use a raw capture to measure durations or to see every value.
-
-Do not combine the RLE with subsampling either. With the RLE enabled and N above 1, the encoder
-and the subsampler wait for each other after the trigger: the subsampler counts cycles only
-while the encoder is ready, and in RUN the encoder is ready only when a sample is offered, which
-the subsampler does only at the end of its count.
-The capture never completes, and `wait_done()` does not return. [Known issues](#debug-known)
-lists these limitations with the others.
 
 ## Registers {#sub-registers}
 

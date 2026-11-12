@@ -69,10 +69,10 @@ status of each feature, with the tests of the repository that cover it.
 | Edge triggers (built by the driver) | Supported | Driver tests, CLI tests |
 | Subsampler | Supported | Migen simulations, driver tests |
 | Driver, CLI batch mode, dump files | Supported | Driver, dump and CLI tests, Verilator |
-| Run-length encoding (`with_rle`) | Known issues | Migen simulations, driver and dump tests, Verilator |
+| Run-length encoding (`with_rle`) | Available | Migen simulations (runs, run lengths, subsampling), driver and dump tests, Verilator |
 | IO probe (`LiteScopeIO`) | Available | None |
 | `register` option of the analyzer | Available | None |
-| GUI (`litescope_cli --gui`) | Experimental | None |
+| GUI (`litescope_cli --gui`) | Available | None |
 
 The status words mean:
 
@@ -80,16 +80,11 @@ The status words mean:
   test suite covers it.
 - **Available**: in the code and usable. The manual describes exactly what the code does, with
   no claim beyond it.
-- **Known issues**: in the code and usable, with confirmed bugs on this revision that change the
-  result of a capture. The chapter of the feature describes them as limitations, and [Known
-  issues](#debug-known) lists them. The run-length encoder loses samples, and never completes a
-  capture when subsampling is on ([Limitation](#rle-limitation)).
-- **Experimental**: marked as unfinished in the code (`# FIXME`); its behaviour may change. The
-  GUI has such marks on its default values.
+- **Experimental**: marked as unfinished in the code (`# FIXME`); its behaviour may change. No
+  feature has such marks on this revision.
 
-The tests run in simulation; [Simulation and verification](#simulation) lists them. The supported
-features have known issues too, such as the position of the trigger sample and the length of the
-upload; [Known issues](#debug-known) lists every one of this revision.
+The tests run in simulation; [Simulation and verification](#simulation) lists them. [Known
+issues](#debug-known) lists the behaviours of this revision that can surprise a user.
 
 ## What it is not {#intro-limits}
 

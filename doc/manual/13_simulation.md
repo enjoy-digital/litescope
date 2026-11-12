@@ -21,7 +21,7 @@ it, and one test runs the whole chain, from the driver to the gateware, through 
 | End to end | SoC with a CPU, BIOS and two analyzers, in Verilator | BIOS console | `test_sim.py` |
 | Hardware | A board with a bridge | `litex_server` | Not in CI |
 
-The suite collects 62 tests. All but the end-to-end test run in pure Python, with Migen's
+The suite collects 85 tests. All but the end-to-end test run in pure Python, with Migen's
 simulator for the gateware.
 
 ## Running the tests {#sim-run}
@@ -81,10 +81,12 @@ in any case, and the tests write no VCD file.
 
 | Area | What the tests check |
 |------------------------|--------------------------------------------------------------------|
-| Capture | Value trigger, offset 8, subsampling 3: consecutive kept samples, match at index 6 |
-| Groups | Trigger and capture on group 1 of two groups |
+| Capture | Value trigger, offset 8, subsampling 3: consecutive kept samples, trigger sample at index 8 |
+| Trigger position | Trigger sample at index `offset` for offsets from 0 to `length - 1` |
+| Arming | A match during the flush is not seen; `done` drops at the arming |
+| Groups | Trigger and capture on group 1 of two groups; a register value that is no group selects group 0 |
 | Raw data | Without RLE, a set most significant bit is data, not a marker |
-| RLE | A constant probe, runs of different lengths, an RLE build with RLE disabled |
+| RLE | A constant probe, runs of different lengths kept exactly, RLE with subsampling, an RLE build with RLE disabled |
 | Probe lists | Records flattened, duplicates removed, expressions and slices accepted and named |
 | `analyzer.csv` | Configuration and signal rows, state names of a state machine |
 | Host access | 128-bit trigger and read-back through a `CSRBank`, twice in a row |
@@ -93,9 +95,10 @@ The last test drives the analyzer only through a `CSRBank` on a 32-bit bus, as t
 registers are written most significant word first, and each stored word is read as four 32-bit
 sub-words. It captures twice in a row, so it also checks the re-arming.
 
-Three tests lock the position of the matching sample in the capture: index 6 for an offset of 8,
-with and without subsampling, and index 0 for an offset of 0. A change of the trigger pipeline must
-keep them, since dumps and scripts rely on the position ([Storage and read-back](#storage)).
+Three tests lock the position of the trigger sample in the capture: index `offset` for offsets
+from 0 to `length - 1`, index 8 for an offset of 8 with subsampling, and index 8 for an offset of 8
+through the `CSRBank`. A change of the trigger pipeline must keep them, since dumps and scripts
+rely on the position ([Storage and read-back](#storage)).
 
 ## Driver, CLI and dump tests {#sim-host}
 
@@ -106,16 +109,18 @@ decoded data.
 
 | Area | What the tests check |
 |------------------------|--------------------------------------------------------------------|
-| Configuration | Offsets and masks of the signals per group; initial disable of the analyzer |
-| Triggers | Parsing of `0b` and `0x` values with don't care digits; edges as two terms; memory full |
-| Run | Subsampler range, offset and length writes, terms reloaded on each run |
-| Upload | Packing of 32-bit sub-words, `max_samples`, RLE decoding of random streams |
-| Save | sigrok session, VCD with GTKWave filter files for enumerations |
+| Configuration | Offsets and masks of the signals per group; initial disable of the trigger and the RLE; unknown groups rejected |
+| Triggers | Parsing of `0b` and `0x` values with don't care digits; values cut to the signal width; signals of another group rejected; edges as two terms; memory full |
+| Run | Subsampler range, offset and length writes and checks, terms reloaded on each run |
+| Upload | Packing of 32-bit sub-words, configured length, one-sample reads, `max_samples`, RLE decoding of random streams |
+| Save | sigrok session, VCD with GTKWave filter files for enumerations, save without subsampling set |
 
 `test_cli.py` replaces the `RemoteClient` and the driver with fakes and runs the entry points of
 `litescope_cli`. It checks the options, the wiring of the triggers, the JSON output of `--list` and
-of a capture, the error object and the exit code 2 of `--timeout`. `test_dump.py` checks the dump
-writers and the RLE decoder on hand-made data.
+of a capture, the error object, argument errors as JSON, unknown groups, `--name` and the exit
+code 2 of `--timeout`. `test_dump.py` checks the dump writers and the RLE decoder on hand-made
+data: the trigger marker, the VCD time scale, the CSV separators, the sigrok sample rate and
+temporary directory.
 
 ## End-to-end test in Verilator {#sim-e2e}
 
@@ -133,19 +138,18 @@ the simulated serial port.](sim_e2e.svg)
 | Serial port | `serial2tcp` module on a free TCP port of the host |
 | `analyzer` | 32-bit counter, depth 64, `samplerate` = system clock |
 | `analyzer_rle` | 4-bit constant 5, depth 64, `with_rle=True`, `rle_length=8` |
-| Register access | `CSRBuilder` on `BIOSMemAccess`: one BIOS `mem_read` or `mem_write` per 32-bit word; `mem_read` reads the four bytes one by one |
+| Register access | `CSRBuilder` on `BIOSMemAccess`: one BIOS `mem_write` per 32-bit word written; one `mem_copy` to a main RAM buffer, then one `mem_read` of the buffer, per word read |
 
 The SoC never exits while the test runs, so `analyzer.csv` would not be written at exit. The test
 passes a `pre_run_callback` to the builder that calls `export_csv()` of each analyzer before the
 simulation starts.
 
 The test first checks the scratch register of the SoC, then makes two captures. The raw capture
-has no trigger, an offset of 0 and a length of 16. The test accepts 8 to 16 samples that do not
-decrease, for two reasons. The upload reads the level of the memory, which misses the last words
-([Known issues](#debug-known)). Each byte read of `mem_read` is a read of `storage_mem_data`, which
-takes a word out of the capture, so one 32-bit read consumes four words and the samples are not
-consecutive. The RLE capture has a length of 32 encoded words and an upload capped at 10 samples:
-the 10 samples must all be 5.
+has no trigger, an offset of 0 and a length of 16: the test checks 16 consecutive counter values.
+`mem_read` reads one byte per bus access, and each read of `storage_mem_data` takes a word out of
+the capture, so `BIOSMemAccess` first copies each 32-bit word to a buffer in the main RAM with
+`mem_copy`, then reads the buffer. The RLE capture has a length of 32 encoded words and an upload
+capped at 10 samples: the 10 samples must all be 5.
 
 ## Adding a test {#sim-adding}
 
@@ -160,8 +164,8 @@ Pick the cheapest level that shows the behaviour:
 - A change that crosses the bus: run `test_sim.py` locally, with Verilator installed.
 
 Keep the tests fast and silent: temporary directories for written files, no VCD file. Trigger well
-after the arming: the storage drops the samples of its first `depth` cycles while it flushes, so a
-match in that window is not where the test expects it.
+after the arming: the trigger compares nothing during the first `depth` cycles, while the storage
+flushes, so a match in that window is not seen.
 
 ## Capturing in a simulated design {#sim-litex-sim}
 
@@ -174,7 +178,7 @@ first with an elaboration that compiles nothing, from the same directory:
 
 ```sh
 # Elaborate only, with the options of the run: writes analyzer.csv and csr.csv, then exits
-litex_sim --with-analyzer --uart-name=crossover+uartbone --csr-csv csr.csv --no-compile
+litex_sim --with-analyzer --uart-name=crossover+uartbone --uart-pty --csr-csv csr.csv --no-compile
 # Then build and run the simulation with the same options
 ```
 

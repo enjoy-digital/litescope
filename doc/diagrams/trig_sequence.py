@@ -5,7 +5,8 @@
 # SPDX-License-Identifier: BSD-2-Clause
 #
 # A two-term sequence (a rising edge of x as the driver builds it): the first term is consumed on
-# its match, the second is compared from the next sample, hit follows the last match.
+# its match, the second is compared from the next sample, hit is set from the sample of the last
+# match on (the trigger sample).
 
 from arch_helpers import *
 
@@ -16,8 +17,7 @@ def build():
     w.clock("scope clock")
     w.bit("x", "1100011100")
     w.bus("term compared", ["x = 0"]*3 + ["x = 1"]*3 + [None]*4, accent=["x = 1"])
-    w.bit("hit", "0000001111")
+    w.bit("hit", "0000011111")
     w.marker(2, "term 1\nmatch", dy=22)
-    w.marker(5, "term 2\nmatch", dy=22)
-    w.marker(6, "first hit\nsample", dy=22)
+    w.marker(5, "term 2 match:\ntrigger sample", dy=22)
     return d

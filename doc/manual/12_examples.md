@@ -55,9 +55,10 @@ litescope_cli --list
 litescope_cli -r <signal>
 ```
 
-The comments at the top of the file give trigger examples with signal names of an older LiteX
-naming. Take the names from `litescope_cli --list` instead: an elaboration of the example names the
-counter `main_count1` and the strobe of the instruction bus `main_litescopesoc_ibus_stb`.
+The comments at the top of the file give trigger examples with the names of an elaboration of the
+example: the counter `main_count1` and the strobe of the instruction bus
+`main_litescopesoc_ibus_stb`. The names depend on the version of LiteX: take them from
+`litescope_cli --list` of your build.
 
 `test/test_examples.py` runs the elaboration of the example and checks that the Verilog is written.
 It needs LiteX-Boards but no FPGA toolchain.
@@ -71,8 +72,8 @@ deep.
 
 This is the quickest way to learn the tools: no board, no bitstream, and a CPU that makes bus
 traffic as soon as the BIOS starts. [Getting started](#getting-started) runs a complete session on
-it, from `analyzer.csv` to the waveform. The simulated analyzer is built without `samplerate`, so
-its dumps carry the default rate ([Wrong time scale](#debug-timescale)).
+it, from `analyzer.csv` to the waveform. The simulated analyzer gets the frequency of the
+simulated clock, 1 MHz, as `samplerate`, so its dumps carry a real time axis.
 
 ## Uses across the ecosystem {#ex-ecosystem}
 

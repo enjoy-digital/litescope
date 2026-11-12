@@ -64,9 +64,8 @@ equals the corresponding bit of the value; the bits outside the mask are ignored
 them; bits 3 to 0 are don't care, so the term matches.](primer_trigger.svg)
 
 Such a mask and value pair is a *term*. One term can test several probes at once: each probe adds
-its bits to the mask and its expected value to the value, so the probes are ANDed. On this
-revision the driver does not cut a value to the width of its probe: keep each value within its
-probe ([Trigger](#trigger)).
+its bits to the mask and its expected value to the value, so the probes are ANDed. The driver
+cuts each value to the width of its probe ([Trigger](#trigger)).
 
 In LiteScope, the driver builds terms from probe names and values given as strings: `"0x12"`,
 `"0b1x0"` with `x` as a don't care bit, or `"0x1x"` with `x` as a don't care hexadecimal digit.
@@ -109,13 +108,12 @@ the `depth`.](primer_window.svg)
 
 If the trigger fires before the pre-trigger window is full, the capture holds fewer samples from
 before the trigger. Arm the analyzer early enough, or reduce the window. The arming itself takes
-`depth` clock cycles; with fast register writes, a match during that time starts the capture late,
-without a pre-trigger window ([Limitation: match during the flush](#stor-flush)).
+`depth` clock cycles, during which the trigger compares nothing: an event in that time is not
+seen ([Flush and arming](#stor-flush)).
 
 In LiteScope, the pre-trigger window is set by the `offset` argument of the driver's `run()` and
-the capture length by its `length` argument. On this revision the window holds two samples fewer
-than `offset`; [Trigger position in the capture](#trig-position) gives the exact position of the
-trigger in the uploaded samples.
+the capture length by its `length` argument. The trigger sample is at index `offset` of the
+uploaded samples; [Trigger position in the capture](#trig-position) gives the details.
 
 ## Subsampling {#primer-subsampling}
 
@@ -150,9 +148,7 @@ one, RLE stores one word per sample and saves nothing: this is the worst case.
 
 In LiteScope, RLE is a build option (`with_rle`), enabled per capture by the driver. It applies
 after the trigger: the pre-trigger window is stored raw. The driver expands the words back into
-samples. On this revision the encoder loses one sample after each run and each full repeat word,
-and does not work with subsampling ([Limitation](#rle-limitation)). See [Subsampler and run-length
-encoding](#subsampler-rle).
+samples. See [Subsampler and run-length encoding](#subsampler-rle).
 
 ## Clock domains {#primer-clocks}
 
@@ -209,7 +205,7 @@ The uploaded samples are written to a file that a waveform viewer opens. The usu
 - CSV, JSON or Python, for scripts that check a capture without a viewer.
 
 In LiteScope, the driver's `save()` picks the format from the file extension, and adds a clock
-and a trigger marker to the waveform. See [Capture files](#file-formats).
+and a trigger marker, set at the trigger sample, to the waveform. See [Capture files](#file-formats).
 
 ## A method {#primer-method}
 

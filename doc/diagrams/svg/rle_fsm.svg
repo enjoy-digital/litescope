@@ -18,10 +18,8 @@
 <text x="242" y="88.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="242" dy="0">post-trigger</tspan><tspan x="242" dy="14.4">sample</tspan></text>
 <polyline points="415,100 415,40 345,40 345,100" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)"/>
 <text x="380" y="28" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="380" dy="0">same sample: count + 1</tspan></text>
-<polyline points="455,123 580,123" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)"/>
-<text x="517" y="88.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="517" dy="0">new value after</tspan><tspan x="517" dy="14.4">a run: emit count</tspan></text>
-<polyline points="655,146 655,205 415,205 415,146" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)"/>
-<text x="570" y="193" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="570" dy="0">emit raw sample</tspan></text>
+<polyline points="455,112 515,112 515,134 455,134" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)"/>
+<text x="615" y="101.4" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="615" dy="0">new value after a run:</tspan><tspan x="615" dy="14.4">emit count, keep the value</tspan><tspan x="615" dy="14.4">in pending, emit it</tspan><tspan x="615" dy="14.4">on the next cycle</tspan></text>
 <polyline points="345,146 345,205 105,205 105,146" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)"/>
 <text x="200" y="193" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="200" dy="0">capture over</tspan></text>
 <g fill="#000000" stroke="#000000" stroke-width="3.0" opacity="0.05" stroke-linejoin="round" aria-hidden="true">
@@ -50,17 +48,4 @@
 <path d="M305,100 L443.5,100 L455,111.5 L455,146 Q455,146 455,146 L316.5,146 L305,134.5 L305,100 Q305,100 305,100 Z"/>
 </g>
 <text x="380" y="123" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="15" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="380" dy="0">RUN</tspan></text>
-<g fill="#000000" stroke="#000000" stroke-width="3.0" opacity="0.05" stroke-linejoin="round" aria-hidden="true">
-<path d="M581.2,102 L719.7,102 L731.2,113.5 L731.2,148 Q731.2,148 731.2,148 L592.7,148 L581.2,136.5 L581.2,102 Q581.2,102 581.2,102 Z"/>
-</g>
-<g fill="#000000" stroke="#000000" stroke-width="1.5" opacity="0.08" stroke-linejoin="round" aria-hidden="true">
-<path d="M581.2,102 L719.7,102 L731.2,113.5 L731.2,148 Q731.2,148 731.2,148 L592.7,148 L581.2,136.5 L581.2,102 Q581.2,102 581.2,102 Z"/>
-</g>
-<g fill="#000000" stroke="#000000" stroke-width="0" opacity="0.12" stroke-linejoin="round" aria-hidden="true">
-<path d="M581,101.5 L719.5,101.5 L731,113 L731,147.5 Q731,147.5 731,147.5 L592.5,147.5 L581,136 L581,101.5 Q581,101.5 581,101.5 Z"/>
-</g>
-<g fill="#e6f5fb" stroke="#5b5b5b" stroke-width="0.9" stroke-linejoin="round">
-<path d="M580,100 L718.5,100 L730,111.5 L730,146 Q730,146 730,146 L591.5,146 L580,134.5 L580,100 Q580,100 580,100 Z"/>
-</g>
-<text x="655" y="123" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="15" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="655" dy="0">EMIT_RAW</tspan></text>
 </svg>

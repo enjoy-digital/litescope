@@ -50,18 +50,18 @@ step and a progress bar.
 
 | Method | Effect |
 |----------------------------------------------------------|------------------------------------------|
-| `configure_group(n)` | Selects group `n` |
+| `configure_group(n)` | Selects group `n`; raises `ValueError` for a group not in `analyzer.csv` |
 | `add_trigger(value, mask, cond)` | Appends a term: raw `value` and `mask`, or `cond`, a dictionary `{signal: string}` |
 | `configure_trigger()` | Same as `add_trigger` |
 | `add_rising_edge_trigger(name)` | Appends two terms: the signal at 0, then at 1 |
 | `add_falling_edge_trigger(name)` | Appends two terms: the signal at 1, then at 0 |
 | `configure_subsampler(n)` | Keeps one sample every `n` cycles, `n` from 1 to `2**subsampler_width` |
 | `configure_rle(enable)` | Enables the run-length encoder; raises on a build without RLE |
-| `run(offset=0, length=None)` | Loads the terms and arms; `offset` below `depth`, `length` up to `depth` (default) |
+| `run(offset=0, length=None)` | Loads the terms and arms; `offset` below `depth` and below `length`, `length` up to `depth` (default) |
 | `done()`, `wait_done(delay=0.2)` | Tests, or waits without timeout, for the end of the capture |
-| `upload(max_samples=None)` | Reads the capture, decodes RLE, caps to `max_samples` samples |
+| `upload(max_samples=None)` | Reads the length set by `run()`, decodes RLE, caps to `max_samples` samples |
 | `save(filename, samplerate, flatten)` | Writes a dump; the extension selects VCD, sigrok, CSV, JSON or Python |
-| `get_instant_value(group, name)` | Immediate one-sample capture, returns the value of a signal; raises `IndexError` on this revision ([Known issues](#debug-known)) |
+| `get_instant_value(group, name)` | Immediate one-sample capture, returns the value of a signal |
 | `clear()` | Drops the terms and the data, disarms |
 
 `LiteScopeIODriver(regs, name)` has `read()` and `write(value)`. [Host tools: CLI, driver and
@@ -76,8 +76,9 @@ GUI](#host-tools) describes both drivers with examples.
 | `-v`, `--value-trigger SIG VALUE` | | Value condition; every `-v` goes into one term |
 | `-l`, `--list` | | Lists the signals of `--group`; needs no bridge |
 | `--host`, `--port` | `localhost`, `1234` | Address of `litex_server` |
-| `--csv` | `analyzer.csv` | Analyzer file; its name without extension is the analyzer name |
+| `--csv` | `analyzer.csv` | Analyzer file; its name without extension is the default analyzer name |
 | `--csr-csv` | `csr.csv` | Register map of the SoC |
+| `--name` | `--csv` base name | Analyzer name in the SoC, prefix of its registers |
 | `--group` | `0` | Group to capture |
 | `--subsampling` | `1` | Subsampling factor |
 | `--rle` | off | Enables RLE for the capture |
@@ -85,8 +86,8 @@ GUI](#host-tools) describes both drivers with examples.
 | `--length` | depth | Words to capture |
 | `--dump` | `dump.vcd` | Dump file; the extension selects the format |
 | `--timeout S` | none | Gives up after S seconds without trigger, exit code 2 |
-| `--json` | | One JSON object on the output; errors as `{"error": ...}`, exit code 1 |
-| `--gui` | | Experimental window built with dearpygui |
+| `--json` | | One JSON object on the output; errors, command-line errors included, as `{"error": ...}`, exit code 1 |
+| `--gui` | | Capture window built with dearpygui |
 
 The terms are loaded in a fixed order: every `-r`, then every `-f`, then the term of the `-v`
 conditions ([Host tools: CLI, driver and GUI](#host-tools)).
