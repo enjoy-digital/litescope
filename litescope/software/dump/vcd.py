@@ -185,7 +185,7 @@ class VCDDump(Dump):
                 r += "^1 {}\n".format(filter_filename)
             r += "{}\n".format(self._gtkw_variable_name(v))
             if self._has_enum(v):
-                r += "@28\n"
+                r += "@820\n" # ASCII (0x800) + Right Justify (0x20).
                 r += "{}\n".format(self._gtkw_text_variable_name(v))
         return r
 

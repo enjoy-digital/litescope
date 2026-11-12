@@ -196,6 +196,26 @@ class TestDump(unittest.TestCase):
         CSVDump(dump).write(filename)
         os.remove(filename)
 
+    def test_csv_separators(self):
+        # One "," between fields and none at the end of a row: a CSV reader gets the values as
+        # written (no empty last field, no leading space).
+        import csv
+        capture = Dump()
+        capture.add(DumpVariable("state", 2, [0, 1, 2]))
+        capture.add(DumpVariable("flag",  1, [1, 0, 1]))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filename = os.path.join(tmpdir, "dump.csv")
+            CSVDump(capture).write(filename)
+            with open(filename, newline="") as f:
+                rows = list(csv.reader(f))
+        self.assertEqual(rows, [
+            ["state", "flag"],
+            ["2",     "1"],
+            ["00",    "1"],
+            ["01",    "0"],
+            ["10",    "1"],
+        ])
+
     def test_py(self):
         filename = "dump.py"
         PythonDump(dump).write(filename)
@@ -219,7 +239,7 @@ class TestDump(unittest.TestCase):
 
                 metadata = sr.read("metadata").decode()
                 self.assertIn("total probes=8",       metadata)
-                self.assertIn("samplerate=250.0 MHz", metadata)
+                self.assertIn("samplerate=250 MHz",   metadata)
                 self.assertIn("unitsize=1",           metadata)
                 self.assertIn("probe1=state[0]",      metadata)
                 self.assertIn("probe2=state[1]",      metadata)
@@ -236,6 +256,29 @@ class TestDump(unittest.TestCase):
                 ("state[1]", 1, [0, 0, 1]),
                 ("flag",     1, [1, 0, 1]),
             ])
+
+    def test_sigrok_samplerate(self):
+        # Written in the largest unit giving a whole number (not rounded down to MHz) and read
+        # back; the metadata rate is twice the sample rate (each sample is written twice).
+        for samplerate, text in [
+            (125e6,   "250 MHz"),
+            (100e3,   "200 kHz"),
+            (1.5e6,   "3 MHz"),
+            (12.5e6,  "25 MHz"),
+            (2.5e3,   "5 kHz"),
+            (100e6/3, "66666667 Hz"),
+            (1e9,     "2 GHz"),
+        ]:
+            capture = Dump()
+            capture.add(DumpVariable("flag", 1, [1, 0, 1]))
+            with tempfile.TemporaryDirectory() as tmpdir:
+                filename = os.path.join(tmpdir, "dump.sr")
+                SigrokDump(capture, samplerate=samplerate).write(filename)
+                with zipfile.ZipFile(filename) as sr:
+                    self.assertIn("samplerate={}\n".format(text), sr.read("metadata").decode())
+                loaded = SigrokDump()
+                loaded.read(filename)
+                self.assertAlmostEqual(loaded.samplerate, 2*samplerate, delta=1)
 
     def test_sigrok_keeps_directory_named_after_file(self):
         capture = Dump()
@@ -302,6 +345,9 @@ class TestDump(unittest.TestCase):
             self.assertIn("top.state[1:0]", gtkw)
             self.assertIn("top.state_text[31:0]", gtkw)
             self.assertIn("top.flag",       gtkw)
+            # State name trace shown in ASCII (flag 0x800), not in binary (0x28).
+            self.assertIn("@820\ntop.state_text[31:0]", gtkw)
+            self.assertNotIn("@28\n", gtkw)
 
             with open(vcd_filename) as f:
                 vcd = f.read()

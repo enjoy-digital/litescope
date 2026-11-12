@@ -25,6 +25,15 @@ class SigrokDump(Dump):
         f.write("1")
         f.close()
 
+    @staticmethod
+    def samplerate_string(samplerate):
+        # Largest unit that gives a whole number (as sigrok writes it): no rounding to MHz.
+        samplerate = int(round(samplerate))
+        for unit, scale in [("GHz", 10**9), ("MHz", 10**6), ("kHz", 10**3)]:
+            if (samplerate >= scale) and (samplerate % scale == 0):
+                return "{} {}".format(samplerate//scale, unit)
+        return "{} Hz".format(samplerate)
+
     def write_metadata(self, path):
         probe_bits = math.ceil(sum(variable.width for variable in self.variables)/8)*8
         f = open(os.path.join(path, "metadata"), "w")
@@ -34,11 +43,11 @@ sigrok version=0.3.0
 [device 1]
 capturefile=logic-1-1
 total probes={}
-samplerate={} MHz
+samplerate={}
 unitsize={}
 """.format(
         probe_bits,
-        self.samplerate//1e6*2,
+        self.samplerate_string(2*self.samplerate), # Each sample is written twice.
         probe_bits//8
     )
         i = 1
@@ -101,12 +110,10 @@ unitsize={}
                 index = int(m.group(1))
                 name = m.group(2).strip()
                 probes[name] = index
-            m = re.search(r"samplerate\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*kHz", l, re.I)
+            m = re.search(r"samplerate\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*([kMG]?)Hz", l, re.I)
             if m is not None:
-                self.samplerate = float(m.group(1))*1000
-            m = re.search(r"samplerate\s*=\s*([0-9]+(?:\.[0-9]+)?)\s*MHz", l, re.I)
-            if m is not None:
-                self.samplerate = float(m.group(1))*1000000
+                scale = {"": 1, "k": 1e3, "m": 1e6, "g": 1e9}[m.group(2).lower()]
+                self.samplerate = float(m.group(1))*scale
         f.close()
         return probes
 

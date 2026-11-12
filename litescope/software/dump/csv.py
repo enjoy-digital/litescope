@@ -12,32 +12,26 @@ class CSVDump(Dump):
         Dump.__init__(self)
         self.variables = [] if dump is None else dump.variables
 
+    # One "," between fields, none at the end of a row (header rows: names, widths).
     def generate_vars(self):
-        r = ""
-        for variable in self.variables:
-            r += variable.name
-            r += ","
-        r += "\n"
-        for variable in self.variables:
-            r += str(variable.width)
-            r += ","
-        r += "\n"
+        r  = ",".join(variable.name       for variable in self.variables) + "\n"
+        r += ",".join(str(variable.width) for variable in self.variables) + "\n"
         return r
 
     def generate_dumpvars(self):
         r  = ""
         for i in range(len(self)):
+            values = []
             for variable in self.variables:
                 try:
                     variable.current_value = variable.values[i]
                 except:
                     pass
                 if variable.current_value == "x":
-                    r += "x"
+                    values.append("x")
                 else:
-                    r += dec2bin(variable.current_value, variable.width)
-                r += ", "
-            r += "\n"
+                    values.append(dec2bin(variable.current_value, variable.width))
+            r += ",".join(values) + "\n"
         return r
 
     def write(self, filename):
