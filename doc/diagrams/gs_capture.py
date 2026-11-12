@@ -6,8 +6,8 @@
 #
 # A real capture, drawn from its VCD: captures/gs_rising.vcd is the dump written by
 # `litescope_cli -r simsoc_ibus_stb` on `litex_sim --with-analyzer` (Getting started chapter).
-# Samples 28 to 47: ibus_stb rises at sample 30 (the trigger), then the CPU refills one line of its
-# instruction cache, eight words from word address 0x6b0, one ack every other cycle.
+# Samples 30 to 49: ibus_stb rises at sample 32 (the trigger, at --offset), then the CPU refills
+# one line of its instruction cache, eight words from word address 0x6b0, one ack every other cycle.
 
 import re
 from pathlib import Path
@@ -15,9 +15,9 @@ from pathlib import Path
 from primer_helpers import *
 
 VCD    = Path(__file__).resolve().parent/"captures"/"gs_rising.vcd"
-FIRST  = 28 # First sample drawn.
+FIRST  = 30 # First sample drawn.
 COUNT  = 20 # Samples drawn.
-MATCH  = 30 # Sample where ibus_stb is first seen high (read from the VCD, checked below).
+MATCH  = 32 # Sample where ibus_stb is first seen high (read from the VCD, checked below).
 
 
 def read_vcd(path):

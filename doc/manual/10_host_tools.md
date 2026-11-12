@@ -2,7 +2,7 @@
 
 This chapter describes the software that runs on the host: how it reaches the analyzer through
 `litex_server`, the `litescope_cli` command, the Python driver for scripted captures, the
-experimental GUI and the `litex_mcp` tools. It is the reference for every option and method; the
+GUI and the `litex_mcp` tools. It is the reference for every option and method; the
 first capture, step by step, is in [Getting started](#getting-started).
 
 ## At a glance {#host-glance}
@@ -70,7 +70,8 @@ capture, or the event can happen before the trigger is armed.
 
 A read that gets no answer within the client timeout (2 s) returns zeros instead of raising an
 error, unless the client is created with `raise_on_timeout=True`. A capture uploaded over a
-broken link can then come back as zeros; scripts should pass `raise_on_timeout=True`.
+broken link can then come back as zeros; scripts should pass `raise_on_timeout=True`, as
+`litescope_cli` does.
 
 ## `litescope_cli` {#host-cli}
 
@@ -94,6 +95,7 @@ exits with code 2; a written dump exits with code 0.](host_cli_flow.svg)
 | `--port` | `1234` | Port of `litex_server` |
 | `--csv` | `analyzer.csv` | Analyzer description written by the build |
 | `--csr-csv` | `csr.csv` | Register map of the SoC |
+| `--name` | `--csv` base name | Name of the analyzer in the SoC, prefix of its registers |
 | `--group` | `0` | Group to capture |
 | `--subsampling` | `1` | Keep one sample every N cycles |
 | `--rle` | off | Enable run-length encoding |
@@ -105,37 +107,31 @@ exits with code 2; a written dump exits with code 0.](host_cli_flow.svg)
 | `--json` | off | Print one JSON object; errors exit 1 |
 
 `--offset` and `--length` accept any Python integer literal, such as `256` or `0x100`. The driver
-checks that the offset is smaller than the depth and that the length is at most the depth. The
-default offset of 32 therefore fails on an analyzer with a depth of 32 or less: give `--offset`
-on small analyzers. The offset is not checked against the length: an offset equal to or above
-`--length` gives a capture with no sample after the trigger, so lower `--offset` together with
-`--length` ([Known issues](#debug-known)).
+checks that the offset is smaller than the depth and than the length, and that the length is at
+most the depth (`AssertionError`). The default offset of 32 therefore fails on an analyzer with a
+depth of 32 or less, and with a `--length` of 32 or less: give `--offset` with them.
 
-`--group` is not checked either. With a group that `analyzer.csv` does not list, `--list` prints
-nothing and exits with code 0, a trigger option stops with `ValueError: max() arg is an empty
-sequence`, and a capture without trigger never completes. Take the group numbers from the
-`signal` rows of `analyzer.csv`.
+`--group` must be a group of `analyzer.csv`: with another number, `--list` and a capture stop with
+`ValueError: Group N not in analyzer.csv.`. Take the group numbers from the `signal` rows of
+`analyzer.csv`.
 
 With `--rle`, `--length` counts stored words, not decoded samples; [Subsampler and run-length
 encoding](#subsampler-rle) explains the difference. `--rle` on an analyzer built without RLE
 stops with an error. `--subsampling` accepts 1 to `2**subsampler_width`, which is 65536 with the
 default width.
 
-The analyzer name is the base name of the `--csv` file: `--csv build/analyzer.csv` drives the
-registers `analyzer_*`. Keep the file name equal to the name of the analyzer in the SoC; with a
-renamed file, the driver looks for registers that do not exist.
+The analyzer name is `--name`, else the base name of the `--csv` file: `--csv build/analyzer.csv`
+drives the registers `analyzer_*`. With a CSV file that does not carry the name of the analyzer in
+the SoC, pass `--name`; otherwise the driver looks for registers that do not exist.
 
 ### Signal names {#host-cli-names}
 
-Each signal given to `-r`, `-f` or `-v` is looked up among the signals of `--group`. An exact
-name is used as is, and the CLI prints `Exact:` with the name; `-v` and `-f` look the name up
-twice, so their `Exact:` line appears twice. Otherwise the argument is a Python
-regular expression: the signal with the longest matching text wins, and a tie stops with `Found
-multiple candidates`.
-
-This lookup has two side effects. A name that matches nothing reports a tie between all the
-signals of the group, not a missing signal. In a group of one signal, any name selects that
-signal. Run `litescope_cli --list --group N` first and copy the full names.
+Each signal given to `-r`, `-f` or `-v` is looked up once among the signals of `--group`. An
+exact name is used as is, and the CLI prints `Exact:` with the name. Otherwise the argument is a
+Python regular expression: the signal with the longest matching text wins, a tie stops with
+`Found multiple candidates`, and a name that matches no signal stops with `No signal matching`,
+followed by the name and the signals of the group. Run `litescope_cli --list --group N` first and
+copy the full names.
 
 ### Trigger terms {#host-cli-triggers}
 
@@ -160,10 +156,8 @@ follows.
 | `0x...` | Hexadecimal; `x` is a don't care nibble | `0x1x`: bits 7 to 4 only |
 | other | Any Python integer literal | `16`, `0o20` |
 
-Give each value within the width of its signal. The mask of a term never covers more than the
-bits of the signal, but the value is not cut: its extra bits fall on the next signal, and corrupt
-the condition on that signal when another `-v` of the same term covers it ([Known
-issues](#debug-known)). A plain integer value compares every bit of the signal.
+The driver cuts the mask and the value of a term to the bits of the signal: the bits of a value
+wider than the signal are ignored. A plain integer value compares every bit of the signal.
 
 ### What the CLI prints {#host-cli-output}
 
@@ -175,31 +169,30 @@ lines of the CLI. The lines follow the steps of the figure above.
 | `Rising edge:`, `Condition:` | Trigger terms, with the full signal names |
 | `run (offset=..., length=...)` | Terms loaded, storage and trigger armed |
 | `wait_done (delay=0.2s)` | Polling of `storage_done` every 0.2 s |
-| `upload (words=...)` | Words to read back (`storage_mem_level`) |
+| `upload (words=...)` | Words to read back: the length of the run |
 | progress bar | Upload in bursts |
 | `write dump.vcd` | Dump written |
 
-On this revision the `upload (words=...)` count is four words below the requested length, and
-0 for a length of 4 or less ([Known issues](#debug-known)). The upload reads the fill level of the
-storage, which does not count the words already moved into the
-clock-domain crossing; [Upload](#stor-upload) describes this read path.
+The `upload (words=...)` count is the length of the run, `--length` or the depth;
+[Upload](#stor-upload) describes the read path.
 
 ### Scripts and agents: `--json` and `--timeout` {#host-cli-json}
 
 `--json` prints one JSON object on the standard output and no progress lines, so a script or an
-agent can parse the result. Only a signal present in several groups at different positions adds
-a warning line of the driver before the object. `--timeout` bounds the wait for the trigger; without
-it, the CLI waits forever. The exit codes are listed below.
+agent can parse the result. The warning of the driver about a signal present in several groups at
+different positions goes to the standard error. `--timeout` bounds the wait for the trigger;
+without it, the CLI waits forever. The exit codes are listed below.
 
 | Exit code | Meaning | JSON object |
 |-----------|----------------------------------|------------------------------------------------|
 | 0 | Dump written, or signals listed | `triggered: true`, `dump`, `samples`, `offset` |
-| 1 | Error: file, connection, value | `{"schema": 1, "error": "..."}` |
+| 1 | Error: command line, file, connection, value, read timeout | `{"schema": 1, "error": "..."}` |
 | 2 | No trigger within `--timeout` | `triggered: false` |
 
-A command-line error, such as an unknown option or a missing argument, is reported by the argument
-parser: the usage on the standard error, no JSON, and exit code 2. Scripts should check that the
-output holds a JSON object before reading code 2 as a timeout ([Known issues](#debug-known)).
+With `--json`, a command-line error, such as an unknown option or a missing argument, is also an
+error object, `{"schema": 1, "error": "ArgumentError: ..."}`, with exit code 1: code 2 always
+means a timeout. Without `--json`, the argument parser prints the usage on the standard error and
+exits with code 2, the code of a timeout too ([Known issues](#debug-known)).
 
 Listing needs only `analyzer.csv`, not a running SoC, and with `--json` each signal comes with
 its width. With the `analyzer.csv` of [the example of Capture files](#fmt-analyzer-csv), whose
@@ -220,25 +213,25 @@ $ litescope_cli --json --port 1299 -r flag
 A capture that ends with code 2 leaves the analyzer armed. The next run of the CLI or of the
 driver disarms it and loads its own terms, so no cleanup is needed.
 
-## The GUI (experimental) {#host-gui}
+## The GUI {#host-gui}
 
 `litescope_cli --gui` opens a small window built with dearpygui, a package that is not
-installed with LiteScope (`pip3 install dearpygui`). Its defaults are marked as unfinished in
-the code, so the GUI is [experimental](#intro-status). The connection options, `--csv`,
-`--group`, `--offset`, `--rle` and `--dump` apply as in the batch mode.
+installed with LiteScope (`pip3 install dearpygui`). Its [status](#intro-status) is given in the
+introduction. The connection options, `--csv`, `--name`, `--group`, `--subsampling`, `--offset`,
+`--length`, `--rle` and `--dump` give the defaults of its fields.
 
 | Field | Default | Note |
-|-----------------|------------|---------------------------------------------|
+|-----------------|-----------------|----------------------------------------|
 | Offset | `--offset` | Pre-trigger samples |
-| Length | `128` | Fixed default, not the depth |
-| Group | `0` | Not taken from `--group` |
-| Subsampling | `1` | Not taken from `--subsampling` |
+| Length | `--length` | Empty for the depth |
+| Group | `--group` | Read-only |
+| Subsampling | `--subsampling` | Keep one sample every N cycles |
 | RLE | `--rle` | Checkbox |
 | Dump | `--dump` | Output file |
 | One per signal | `0bx` | Value of that signal in the trigger term |
 
-The trigger window has one field per signal of the `--group` group, built when the window opens;
-keep the Group field equal to `--group`. All the fields form a single value term, and `0bx`
+The trigger window has one field per signal of the `--group` group, built when the window opens,
+which is why the Group field is read-only. All the fields form a single value term, and `0bx`
 leaves a signal out. Edges and sequences are not available. Run waits for the trigger with no
 timeout.
 
@@ -256,9 +249,10 @@ LiteScopeAnalyzerDriver(regs, name, config_csv=None, debug=False)
 its registers, and `config_csv` defaults to `name + ".csv"`. With `debug=True`, the driver prints
 the lines of [What the CLI prints](#host-cli-output).
 
-Creating the driver writes 0 to the trigger, storage and RLE enables. The trigger flushes its
-terms, and with the storage disabled the stored words drain out of the read path. Create the
-driver before arming, never between a capture and its upload.
+Creating the driver writes 0 to the trigger and RLE enables, and the trigger flushes its terms.
+It leaves `storage_enable` as it is, so a capture that waits to be uploaded stays in the memory.
+`run()` and `clear()` write `storage_enable`. The ambiguity warning of [Scripts and
+agents](#host-cli-json) is printed on the standard error when the driver is created.
 
 ### Methods {#host-driver-methods}
 
@@ -276,28 +270,28 @@ driver before arming, never between a capture and its upload.
 | `wait_done(delay)` | Poll `done()` every `delay` s, no timeout |
 | `upload(max_samples)` | Read the words, decode RLE, return samples |
 | `save(filename, ...)` | Write a dump; the extension picks the format |
-| `get_instant_value(group, name)` | One-sample capture of one signal; fails on this revision |
+| `get_instant_value(group, name)` | One-sample capture of one signal |
 | `clear()` | Drop terms and samples, disarm |
 
 `add_trigger` takes either a raw `value` and `mask` over the whole sample, or `cond`, a
 dictionary of signal names and value strings parsed as in [Trigger terms](#host-cli-triggers).
 Names in `cond` are exact; the regular expression lookup is a CLI feature. Positions are
 resolved in the group selected when the term is added, so call `configure_group()` first. A name
-that is not in the selected group but is in another one is placed at its position in that other
-group, without error: check the names with `litescope_cli --list --group N`.
+that is not in the selected group raises `ValueError`, with the signals of that group, even when
+another group has it; the edge methods check the name the same way.
 
-`configure_group(n)` writes any value: a group that does not exist selects no probes, and the
-capture never completes.
+`configure_group(n)` raises `ValueError` for a group that `analyzer.csv` does not list.
 
 The driver keeps the terms in a list. Every `run()` disarms the trigger, waits until the
 gateware has flushed its term memory, then loads all the terms again. A script can therefore call
 `run()` again without adding the terms again; `clear()` drops them. More terms than the term
 memory holds (`trigger_depth + 1`, 17 by default) stop `run()` with `Trigger memory full`.
 
-`run()` defaults to an offset of 0 and a length equal to the depth. `save(filename,
-samplerate=None, flatten=False)` without a sample rate divides the rate of `analyzer.csv` by the
-subsampling factor recorded by `configure_subsampler()`, and fails if that method was never
-called. [Capture files](#file-formats) describes `samplerate` and `flatten`.
+`run()` defaults to an offset of 0 and a length equal to the depth, and asserts that the offset
+is below the depth and the length. `save(filename, samplerate=None, flatten=False)` without a
+sample rate divides the rate of `analyzer.csv` by the subsampling factor recorded by
+`configure_subsampler()`, 1 when that method was never called. [Capture files](#file-formats)
+describes `samplerate` and `flatten`.
 
 ### A scripted capture {#host-driver-script}
 
@@ -372,10 +366,9 @@ after RLE decoding.
 captures one sample with no trigger and returns the bits of that signal. It also turns the driver
 logs off for the rest of the session.
 
-The capture has a length of 1, so it meets the missing last words of the upload described in
-[Upload](#stor-upload): on this revision no word is uploaded and the call fails with an
-`IndexError` ([Known issues](#debug-known)). A register of the design, or the [IO
-probe](#io-probe), is the reliable way to read a static value.
+The capture has a length of 1 and goes through the whole capture flow: the flush of the storage,
+then the upload over the bridge. A register of the design, or the [IO probe](#io-probe), reads a
+static value with one register access.
 
 ### The IO probe driver {#host-io-driver}
 
@@ -396,8 +389,7 @@ Triggers are a list of `{"signal", "type", "value"}` objects with the types `ris
 and `value`; value triggers form one term, as in the CLI. The analyzer name is fixed to
 `analyzer`, and a length of 0 means the depth. `signals` limits the answer to some signals and `max_changes` (32) the changes
 listed per signal, which keeps the answer short on a wide sample. The value at trigger is read at
-sample `offset`, the requested pre-trigger length; the sample that matched can sit a few samples
-away ([Trigger position in the capture](#trig-position)).
+sample `offset`, the trigger sample ([Trigger position in the capture](#trig-position)).
 
 ## In the code {#host-code}
 

@@ -88,16 +88,13 @@ each sample and 0 on the second, so a viewer shows one clock period per sample. 
 shows four samples of the example of the next sections.
 
 ![Sample doubling in the dumps. Each uploaded sample takes two time steps; scope_clk is high on
-the first one. scope_trig rises at time step offset, here 2, which is sample 1, not sample 2.
-](fmt_vcd.svg)
+the first one. scope_trig rises at time step 2 x offset, here 4, which is sample 2, the trigger
+sample.](fmt_vcd.svg)
 
-`scope_trig` is 0 for the first `offset` time steps and 1 after, where `offset` is the
-pre-trigger length given to `run()`. As the time steps are doubled, the marker rises at sample
-`offset / 2`, not at sample `offset`. With the CLI default `--offset 32`, it rises at sample 16.
-
-The sample that matched the trigger is not at the marker either: its position in the capture is
-set by the storage, as described in [Storage and read-back](#storage). Locate the event by the
-signal values, and use `scope_trig` only as a rough mark.
+`scope_trig` is 0 for the first `2 x offset` time steps and 1 after, where `offset` is the
+pre-trigger length given to `run()`. The marker thus rises at sample `offset`, the trigger sample
+([Trigger position in the capture](#trig-position)). With the CLI default `--offset 32`, it rises
+at sample 32.
 
 The time scale comes from the `samplerate` of `analyzer.csv`, divided by the subsampling factor.
 `save(filename, samplerate=...)` replaces this value, and is used as given, without the
@@ -157,6 +154,12 @@ b0 #
 b1 !
 b001 "
 b1 #
+#3
+b0 #
+#4
+b0 !
+b010 "
+b1 #
 b1 $
 [...]
 ```
@@ -164,20 +167,21 @@ b1 $
 ### Time scale {#fmt-vcd-timescale}
 
 The time steps `#n` are numbered 0, 1, 2 and so on, and `$timescale` gives the duration of one
-step: half a sample period, in picoseconds, rounded down to an integer. The formula is
-`int(1e12 / (2 * samplerate))`, with the sample rate after subsampling.
+step: half a sample period, rounded down to an integer number of picoseconds,
+`int(1e12 / (2 * samplerate))`, with the sample rate after subsampling. When that number is below
+100, the writer counts in femtoseconds instead, so that the rounding stays small.
 
 | Sample rate | `$timescale` | Note |
 |-------------------|---------------|----------------------------------------------|
+| 1 MHz | `500000ps` | Exact; the rate of `litex_sim --with-analyzer` |
 | 100 MHz | `5000ps` | Exact |
 | 125 MHz | `4000ps` | Exact |
 | 150 MHz | `3333ps` | Rounded down: the time axis runs about 0.01 % short |
-| `1e12` (default) | `0ps` | No usable time axis |
+| `1e12` (default) | `500fs` | Placeholder rate: 1 ps per sample |
 
-The `0ps` case is the one of an analyzer built without `samplerate`, such as the one of `litex_sim
---with-analyzer`. The order of the values is right; only the time axis is wrong. Pass the
-real rate with `save(filename, samplerate=...)` from a script, or build the analyzer with
-`samplerate` set.
+The `500fs` case is the one of an analyzer built without `samplerate`. The order of the values is
+right; only the time axis is wrong. Pass the real rate with `save(filename, samplerate=...)` from
+a script, or build the analyzer with `samplerate` set.
 
 ### FSM states in GTKWave {#fmt-vcd-enums}
 
@@ -191,8 +195,8 @@ an enum and without `flatten`:
 
 - `<dump>_<name>.txt`, a translate filter with one `<value> <label>` line per state;
 - `<dump>.gtkw`, a save file that lists every trace and attaches the filter to the state number.
-  It lists the `_text` variable in binary (`@28`): select it and choose Data Format, ASCII to read
-  the names ([Known issues](#debug-known)).
+  It lists the `_text` variable with the ASCII data format (`@820`), so GTKWave shows the state
+  names on it too.
 
 For a 3-bit `state` probe with the states `IDLE`, `RUN` and `DONE`, saved as `enum.vcd`, the two
 files are:
@@ -210,7 +214,7 @@ top.flag
 @2022
 ^1 enum_state.txt
 top.state[2:0]
-@28
+@820
 top.state_text[31:0]
 @22
 top.scope_clk
@@ -244,7 +248,7 @@ sigrok version=0.3.0
 [device 1]
 capturefile=logic-1-1
 total probes=8
-samplerate=200.0 MHz
+samplerate=200 MHz
 unitsize=1
 probe1=flag
 probe2=count[0]
@@ -254,18 +258,15 @@ probe5=scope_clk
 probe6=scope_trig
 ```
 
-The sample rate written is twice the sample rate, as the time steps are doubled. It is computed
-as `samplerate // 1e6 * 2` MHz: the rate is rounded down to whole megahertz before the doubling,
-so a rate under 1 MHz is written as `0.0 MHz`. Multi-bit values appear in PulseView as separate
-bits; group them in the viewer.
+The sample rate written is twice the sample rate, as the time steps are doubled. It is written in
+the largest unit, GHz, MHz, kHz or Hz, that gives a whole number, without rounding: 1 MHz
+samples give `2 MHz`, 300 kHz samples give `600 kHz`. Multi-bit values appear in PulseView as
+separate bits; group them in the viewer.
 
-To build the archive, the writer creates a directory with the name of the file without its
-extension, then deletes it. An existing directory of that name is deleted first: saving
-`capture.sr` removes a `capture/` directory in the same place ([Known issues](#debug-known)).
-
-`SigrokDump().read(filename)` reads a session back into a list of 1-bit variables, one per
-probe, and takes the sample rate from the metadata (`kHz` or `MHz`). It uses the same temporary
-directory as the writer.
+The writer builds the archive in a temporary directory, so nothing next to the `.sr` file is
+created or deleted. `SigrokDump().read(filename)` reads a session back, through a temporary
+directory too, into a list of 1-bit variables, one per probe, and takes the sample rate from the
+metadata (`Hz`, `kHz`, `MHz` or `GHz`).
 
 ## CSV, JSON and Python {#fmt-text}
 
@@ -274,15 +275,15 @@ sample appears twice, and `scope_clk` and `scope_trig` are included. None of the
 time scale or the state names, and none of them can be read back by LiteScope.
 
 The CSV file has a row of variable names, a row of widths, then one row per time step with every
-value in binary, padded to its width. Each row ends with a separator. The first lines of the
-example are:
+value in binary, padded to its width. The fields are separated by one comma, with no separator at
+the end of a row. The first lines of the example are:
 
 ```text
-flag,count,scope_clk,scope_trig,
-1,3,1,1,
-0, 000, 1, 0, 
-0, 000, 0, 0, 
-1, 001, 1, 1, 
+flag,count,scope_clk,scope_trig
+1,3,1,1
+0,000,1,0
+0,000,0,0
+1,001,1,0
 ```
 
 The JSON file is one object that maps each variable name to its list of integers. The Python
@@ -300,7 +301,8 @@ To work on samples rather than time steps, skip the dump: take the list returned
 `save(filename, flatten=True)` replaces each probe by a 1-bit variable that carries its bits one
 after the other in time, bit 0 first. A probe of width `w` takes `w` time steps per sample, and
 the samples are not doubled. `scope_clk` follows the longest variable, and `scope_trig` rises at
-time step `offset`, which in this mode is not a sample boundary of a probe wider than one bit.
+time step `2 x offset`, which in this mode is not a sample boundary of a probe wider than one
+bit.
 
 The result is a serial view of each probe. Probes of different widths no longer line up in time,
 and no `.gtkw` or filter file is written. The CLI never sets this option.

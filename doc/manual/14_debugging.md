@@ -60,23 +60,25 @@ Check the terms before the design. The usual causes:
   raises a `TypeError` in `add_trigger()`; the CLI always passes strings
   ([Value strings](#trig-values)).
 - **The value does not mean what you think.** In `0b1x0`, `x` is a don't care bit; in `0x1x`, `x`
-  is a don't care hexadecimal digit, four bits. Give values that fit the signal: the extra bits
-  of a wider value spill into the next signal of the same term ([Known issues](#debug-known)).
+  is a don't care hexadecimal digit, four bits. The driver cuts a value to the width of its
+  signal: the extra bits of a wider value are ignored, not compared ([Value
+  strings](#trig-values)).
 - **The terms make a sequence.** Each term must match after the previous one, on a later sample.
   The CLI orders the terms by option type: all `-r`, then all `-f`, then one term with every `-v`.
   So `-r stb -v adr 0x100` waits for a rising edge of `stb`, then for `adr` at `0x100` later; it
   does not mean "a rising edge while `adr` is `0x100`" ([Trigger terms](#host-cli-triggers)).
 - **The group differs.** The driver resolves a signal at its position in the group selected when
-  the term is added. In a script, call `configure_group()` before `add_trigger()`.
-- **The group does not exist.** `configure_group()` writes any number. With a group that the
-  build does not have, no samples reach the trigger and the storage, and the capture never
-  completes. Take the group numbers from `analyzer.csv`.
+  the term is added, and raises `ValueError` for a signal that is not in that group. In a script,
+  call `configure_group()` before `add_trigger()`. `configure_group()` and the `--group` option
+  of the CLI raise an error for a group that `analyzer.csv` does not list.
 - **The name matches another signal.** The CLI matches names as regular expressions: an exact
-  name first, else the longest match, and an error when several signals tie
-  ([Signal names](#host-cli-names)).
+  name first, else the longest match, and an error when several signals tie or when no signal
+  matches ([Signal names](#host-cli-names)).
 - **The event came before the arming.** Writes through `litex_server` are buffered. Read a
   register after `run()` and before causing the event, so that the arming has reached the SoC
-  ([Register access timing](#host-posted-writes)).
+  ([Register access timing](#host-posted-writes)). The trigger also compares nothing while the
+  storage flushes, for `depth` cycles after the arming: an event in that time is not seen
+  ([Flush and arming](#stor-flush)).
 
 For a condition at the time of an edge, build the two terms yourself with the driver: the signal
 at 0, then the signal at 1 together with the condition.
@@ -107,20 +109,15 @@ the terms before the rising edge of `storage_enable`, then set `trigger_enable`,
 
 ## Samples are missing {#debug-missing}
 
-**At the end of the capture.** `upload()` reads as many words as `storage_mem_level` reports. Once
-the capture is complete, the last four words have already moved from the memory into the
-clock-crossing FIFO of the read path, and the level does not count them. The upload then misses
-them: the CLI prints `upload (words=N)` with N four below the length, and a capture of 4 words or
-less uploads nothing, which makes `get_instant_value()` raise `IndexError`. Ask for a length a few
-words larger than needed ([Upload](#stor-upload)).
+**At the end of the capture.** `upload()` reads the length given to `run()` on the same driver.
+A driver that did not run the capture, such as a new script connecting to a capture taken by
+another one, does not know that length: its `upload()` reads the words that `storage_mem_level`
+reports, and misses the last words of the capture, already in the read path
+([Upload](#stor-upload)). Upload from the driver that ran the capture.
 
 **With RLE.** The length counts stored words, not samples. A run of identical samples takes one
 word plus one per `rle_length - 1` repeats; `upload(max_samples=N)` caps the decoded samples
-([Subsampler and run-length encoding](#subsampler-rle)). On this revision the encoder also drops
-one sample each time it stores a repeat word, the value that ends a run, or the word at the end of
-the capture: decoded runs are shorter than the real ones, and a value that lasts one sample right
-after a run is missing ([Limitation](#rle-limitation)). Use a raw capture to measure durations or
-to see every value. With subsampling above 1, an RLE capture never completes.
+([Subsampler and run-length encoding](#subsampler-rle)).
 
 **With subsampling.** The trigger sees every cycle, but only one sample in N is stored. A pulse
 shorter than N cycles may be absent from the capture, and the matching sample itself may not be
@@ -128,31 +125,27 @@ stored.
 
 ## The trigger is not where expected {#debug-position}
 
-The trigger sample does not land at index `offset` of the capture but at index `offset - 2`, or
-0 when `offset` is 2 or less; the Migen tests lock this position ([Trigger position in the
-capture](#trig-position)). Look for the matching value in the data rather than counting samples
-from the start.
+The trigger sample is at index `offset` of the capture, and the `scope_trig` marker of the dumps
+rises at that sample; the Migen tests lock this position ([Trigger position in the
+capture](#trig-position)). Three cases make the capture look different:
 
-The `scope_trig` marker of the dumps does not mark the trigger either. The dumps write each sample
-twice, next to a generated `scope_clk`, and the marker rises at entry `offset` of that doubled
-list, which is sample `offset / 2` ([What every dump contains](#fmt-common)).
-
-The pre-trigger window is shorter than `offset` when the trigger fires soon after the arming: the
-memory holds only the samples taken since the end of the flush. The storage drops every sample for
-`depth` cycles after the arming, while it flushes. When the arming of the trigger reaches the
-analyzer before the flush ends (a CPU in the SoC, a simulation), a match in that window is lost
-and the capture starts at the end of the flush, without a pre-trigger window ([Limitation: match
-during the flush](#stor-flush)).
+- **Subsampling.** The trigger sample is the first kept sample from the match on: the sample that
+  matched may not be in the capture.
+- **A match soon after the arming.** The pre-trigger window is shorter than `offset`: the memory
+  holds only the samples taken since the end of the flush, and the trigger sample sits before
+  index `offset`.
+- **A match during the flush.** The trigger compares nothing for `depth` cycles after the arming:
+  the capture is taken around a later match, if one comes ([Flush and arming](#stor-flush)).
 
 ## Wrong time scale {#debug-timescale}
 
 The dumps take their time scale from the `samplerate` of the analyzer, divided by the subsampling
-factor. The default, `1e12`, is a placeholder: a VCD file then has `$timescale 0ps`, which gives no
-usable time axis. `litex_sim --with-analyzer` keeps that default ([Time scale](#fmt-vcd-timescale)).
+factor. The default, `1e12`, is a placeholder: a VCD file then has `$timescale 500fs`, a time
+axis of 1 ps per sample ([Time scale](#fmt-vcd-timescale)). `litex_sim --with-analyzer` passes
+the frequency of its system clock.
 
 Pass the frequency of `clock_domain` when building the analyzer, or give it to the dump in a
-script: `analyzer.save("dump.vcd", samplerate=100e6)`. The sigrok writer rounds the rate down to a
-whole number of MHz, so rates below 1 MHz are written as 0 MHz.
+script: `analyzer.save("dump.vcd", samplerate=100e6)`.
 
 ## Timing failures and wrong clock domain {#debug-timing}
 
@@ -189,10 +182,15 @@ another build gives wrong values and triggers on the wrong bits without any erro
 `analyzer.csv` and `csr.csv` from the same build, and rebuild both after a change of the probes.
 
 **The name of the analyzer.** The driver binds the registers whose names start with its name. The
-CLI takes that name from the file name of `--csv`: `analyzer.csv` binds `analyzer_*`. A renamed
-file, or an analyzer under another attribute name, ends in `AttributeError` on `trigger_enable`.
-Name the CSV file of each analyzer after its attribute, as the LiteSATA KC705 target does with
-`global_analyzer.csv`.
+CLI takes that name from `--name`, else from the file name of `--csv`: `analyzer.csv` binds
+`analyzer_*`. A renamed file, or an analyzer under another attribute name, ends in
+`AttributeError` on `trigger_enable`. Pass `--name`, or name the CSV file of each analyzer after
+its attribute, as the LiteSATA KC705 target does with `global_analyzer.csv`.
+
+**Read timeouts.** `litescope_cli` creates its `RemoteClient` with `raise_on_timeout=True`: a
+register read that gets no answer stops the capture with an error, instead of returning zeros
+that would look like samples. Do the same in scripts ([Register access
+timing](#host-posted-writes)).
 
 **RLE not available.** `--rle` or `configure_rle(True)` raises "RLE is not available on this
 analyzer" when the build has no `with_rle`.
@@ -205,30 +203,14 @@ reader does not chase them in the design. The status of each feature is in
 
 | Issue | Effect | Workaround |
 |----------------------------------------|------------------------------------------|------------------------------------|
-| Trigger position | The match is at index `offset - 2`, 0 for `offset` up to 2 | Find the matching value in the data |
-| `scope_trig` marker | Rises at sample `offset / 2` | Ignore it; use the data |
-| `upload()` reads `storage_mem_level` words | The last four words are missing; nothing for a length of 4 or less | Ask for a longer capture |
-| `get_instant_value()` | `IndexError`: the one-word capture is already in the read path | Capture a few words with `run()` and read the first |
-| `run()` with `offset` not below `length` | The capture ignores `length` and holds pre-trigger samples only | Keep `offset` below `length` |
-| CLI `--offset` default 32 | Assertion with a depth of 32 or less; no post-trigger sample with `--length` 32 or less | Give `--offset` |
-| `configure_group()` with an unknown group | The capture never completes | Use a group listed in `analyzer.csv` |
-| Match during the flush | With a fast arming, the match is lost and the capture has no pre-trigger window | Cause the event well after the arming |
-| Trigger value wider than its signal | The extra bits compare the next signal of the term | Give values that fit the signal |
-| RLE encoder | One sample dropped per repeat word, per run end and at the end: runs too short, single-sample values lost | Measure durations on a raw capture |
-| RLE with subsampling | The capture never completes | Do not combine them |
+| CLI `--offset` default 32 | `AssertionError` with a depth or a `--length` of 32 or less | Give `--offset` |
+| Match during the flush | Not seen: the trigger compares nothing for `depth` cycles after the arming | Cause the event well after the arming |
+| `upload()` on a new driver | Without `run()`, reads `storage_mem_level` words: the last words are missing | Upload from the driver that ran the capture |
 | `analyzer.csv` | Written when the build returns: after the vendor tools, not at all when they fail | Elaborate with `--no-compile` |
-| Default `samplerate` | VCD with `$timescale 0ps` | Pass `samplerate` at build or save |
-| GTKWave save file | The state name trace is shown in binary | Select it, Data Format, ASCII |
-| sigrok dump | Saving `x.sr` deletes a directory `x/` next to it | Save in a directory of its own |
-| sigrok rate | Rounded down to whole MHz | Use VCD below 1 MHz |
-| `save()` before the subsampling is set | `AttributeError` on `subsampling` | Set the subsampling first, even to 1 |
-| CLI exit code 2 | Means a trigger timeout or a command-line error (usage, no JSON) | Check that the output holds a JSON object |
+| Default `samplerate` | Placeholder rate: VCD time axis of 1 ps per sample | Pass `samplerate` at build or save |
+| CLI exit code 2 without `--json` | Means a trigger timeout or a command-line error (usage) | Use `--json`: command-line errors exit with code 1 |
 | CLI term order | Fixed by option type, not command line order | Use the driver for other orders |
-| CLI name matching | With one probe, any name selects it; with several and no match, "Found multiple candidates" | Use exact names from `--list` |
-| `examples/arty.py` comments | Signal names of an older LiteX | Take the names from `--list` |
-| GUI (`--gui`) | Experimental: fixed default length, group and subsampling, one value term | Use the CLI or the driver |
-
-The two RLE rows are described in [Limitation: lost samples and subsampling](#rle-limitation).
+| GUI (`--gui`) | One value term, no edges, no timeout | Use the CLI or the driver |
 
 ## Where to go next {#debug-next}
 

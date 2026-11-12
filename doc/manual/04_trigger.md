@@ -64,16 +64,16 @@ on, and fires once the last term has matched. The figure below shows a sequence 
 rising edge of a signal `x` as the driver builds it.
 
 ![A two-term sequence. Term 1 (x = 0) matches on the first sample where x is low and is consumed;
-term 2 (x = 1) is compared from the next sample and matches when x rises; hit is set from the
-following sample on.](trig_sequence.svg)
+term 2 (x = 1) is compared from the next sample and matches when x rises; hit is set from that
+sample, the trigger sample, on.](trig_sequence.svg)
 
 The terms of a sequence may match on consecutive samples: the next term is ready one cycle after
 the previous one is consumed. Nothing limits the time between two terms either: the trigger waits
 as long as needed for the next match.
 
-The trigger sets `hit` from the sample after the last match, and keeps it set for the rest of the
-capture. `hit` is the empty flag of the memory, so it stays a level until new terms are loaded.
-The status register `trigger_done` reports the same flag on the `sys` side.
+The trigger sets `hit` from the sample that matched the last term on, and keeps it set for the
+rest of the capture. `hit` is the empty flag of the memory, so it stays a level until new terms
+are loaded. The status register `trigger_done` reports the same flag on the `sys` side.
 
 ## Immediate capture {#trig-immediate}
 
@@ -133,37 +133,32 @@ Values are strings, not integers. The driver tests show the encoding: with a 1-b
 the value `0x9`. The raw form, `add_trigger(value, mask)`, takes the mask and value as integers
 over the whole sample.
 
-Keep each value within the width of its signal. The driver cuts the mask to the signal but not
-the value: the upper bits of a wider value fall on the next signal of the group. When that signal
-is in the same dictionary, its condition changes: `{"flag": "3", "state": "0"}` compares `state`
-with 1.
+The driver cuts the mask and the value to the width of the signal: the bits of a value wider than
+its signal are ignored, so `{"flag": "3", "state": "0"}` compares `flag` with 1 and `state` with 0.
+A name that is not in the selected group raises `ValueError`, even when another group has a signal
+of that name.
 
 ## Trigger position in the capture {#trig-position}
 
 The pre-trigger window, `offset`, asks for that many samples before the trigger. The storage
-places the matching sample at index `offset - 2` of the capture, and at index 0 when `offset` is
-2 or less. The tests lock this position: offset 8 gives index 6 and offset 0 gives index 0
-(`test/test_analyzer.py`).
+places the trigger sample, the one that matched the last term, at index `offset` of the capture:
+`offset` samples precede it and `length - offset - 1` follow it. The tests lock this position for
+offsets from 0 to `length - 1` (`test/test_analyzer.py`). The `scope_trig` variable written by
+`save()` rises at the same sample ([Capture files](#file-formats)).
 
-The position differs from `offset` by two samples, and the dumps do not mark it there: the
-`scope_trig` variable written by `save()` follows its own rule, described in [Capture
-files](#file-formats). Count from the matching value in the data rather than from the marker.
+Some cases change what the capture holds around the trigger:
 
-Other cases move the trigger out of view or shorten the window:
-
-- **Subsampling**: the matching sample is stored only when it falls on a kept cycle, at index
-  `offset - 2`. Otherwise the first kept sample after the match is at index `offset - 1`, and the
-  match itself is not in the capture.
-- **Offset close to length**: `upload()` misses the last four words of the capture
-  ([Upload](#stor-upload)), so the match is uploaded only when `offset` is below `length - 2`.
-- **Offset at or above length**: the capture ignores `length`. The memory keeps `offset` words,
-  and the upload returns about `offset - 4` words, all before the match. `run()` asserts that
-  `offset` is below the depth, not below the length.
-- **Match during the flush**: when the write that arms the trigger reaches the analyzer before the
-  flush of the storage ends, a match during the flush is lost and the capture has no pre-trigger
-  window ([Limitation: match during the flush](#stor-flush)).
+- **Subsampling**: the trigger sample is the first kept sample from the match on, at index
+  `offset`. The sample that matched is that sample only when it falls on a kept cycle; otherwise
+  it is not in the capture.
+- **Offset and length**: `run()` asserts that `offset` is below `length` (`AssertionError`), so
+  the capture always holds the trigger sample.
+- **Match during the flush**: the trigger receives no sample while the storage flushes. A match in
+  that time is not seen, and the capture waits for the next match ([Flush and
+  arming](#stor-flush)).
 - **Match soon after the flush**: a match less than `offset` samples after the flush ends has a
-  shorter pre-trigger window: the capture starts with the first sample after the flush.
+  shorter pre-trigger window: the capture starts with the first sample after the flush, and the
+  trigger sample sits before index `offset`.
 
 ## Limits {#trig-limits}
 

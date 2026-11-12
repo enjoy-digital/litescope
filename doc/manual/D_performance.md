@@ -86,10 +86,6 @@ words of `rle_length - 1` samples each. The pre-trigger window is stored raw, so
 large `offset` compresses less. `upload(max_samples=N)` caps the decoded samples
 ([Subsampler and run-length encoding](#subsampler-rle)).
 
-The formula and the table are those of the encoding. On this revision the encoder drops one sample
-at each repeat word and at each run end ([Limitation](#rle-limitation)): the counts above are
-decoded samples, and the time a capture covers is longer by one cycle per repeat word.
-
 ## Register access and read-back {#perf-readback}
 
 The upload reads `ceil(storage_width / 32)` registers per word: one for a capture up to 32 bits

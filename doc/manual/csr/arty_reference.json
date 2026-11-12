@@ -9,7 +9,7 @@
   "analyzer": [
    {
     "access": "rw",
-    "description": "Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group.",
+    "description": "Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group. A value that is no group selects group 0.",
     "fields": [],
     "name": "mux_value",
     "offset": 0,
@@ -99,7 +99,7 @@
    },
    {
     "access": "ro",
-    "description": "1: storage idle, capture complete or never started.",
+    "description": "1: storage idle, capture complete or never started. Reads 0 from the rising edge of `storage_enable` on.",
     "fields": [],
     "name": "storage_done",
     "offset": 48,
@@ -117,7 +117,7 @@
    },
    {
     "access": "rw",
-    "description": "Pre-trigger window in words, `bits_for(depth)` bits; below `depth`.",
+    "description": "Pre-trigger window in words, `bits_for(depth)` bits; below `storage_length`. The trigger sample is at index `offset` of the capture.",
     "fields": [],
     "name": "storage_offset",
     "offset": 56,

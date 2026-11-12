@@ -57,9 +57,10 @@ Between the blocks, a sample is a stream word with two fields: `data`, the probe
 and `hit`, a flag set by the trigger. The mux asserts `valid` on every cycle, so the stream never
 stops: the analyzer sees the probes continuously and never applies back-pressure to the design.
 
-The trigger sets `hit` on every sample after its last term has matched. The storage looks at
-`hit` to leave its pre-trigger phase, and the RLE starts compressing at the same moment. The
-`hit` flag itself is not stored.
+The trigger sets `hit` from the sample that matched its last term on. The storage looks at `hit`
+to leave its pre-trigger phase, and the RLE starts compressing at the same moment. The `hit` flag
+itself is not stored. The trigger receives samples only while the storage is armed, from the end
+of its flush to the end of the capture ([Flush and arming](#stor-flush)).
 
 ## Probe groups {#arch-groups}
 
@@ -85,9 +86,9 @@ The sample width, `data_width`, is the width of the widest group. Narrower group
 zeros up to that width, so every group costs the same memory width. The group register,
 `mux_value`, has `bits_for(N)` bits for N groups.
 
-The host selects a group before a capture. A value of `mux_value` that names no group connects
-nothing: no sample reaches the trigger or the storage, and the capture never completes. The
-driver does not check the value.
+The host selects a group before a capture. A value of `mux_value` that names no group, written
+to the register directly, selects group 0. `configure_group()` of the driver raises `ValueError`
+for a group that `analyzer.csv` does not list.
 
 The analyzer writes the groups, the width of each probe and the state names of the FSMs to
 `analyzer.csv` when the design is elaborated. The host tools read this file to find each probe in
@@ -116,16 +117,19 @@ asynchronous FIFOs.](arch_clocks.svg)
 
 | Crossing | Direction | Carries |
 |------------------------------|--------------|------------------------------------------------|
-| `MultiReg` | sys to scope | Trigger enable, group, subsampling, RLE enable, storage enable, length, offset |
+| `MultiReg` | sys to scope | Trigger enable, group, subsampling, RLE enable, storage arming (toggle), length, offset |
 | `AsyncFIFO`, `trigger_depth` | sys to scope | Trigger terms (mask and value) |
-| `MultiReg` | scope to sys | Trigger done, storage done, memory level, FLUSH state of the storage |
+| `MultiReg` | scope to sys | Trigger done, storage done, arming acknowledge, memory level, FLUSH state of the storage |
 | `AsyncFIFO`, 4 words | scope to sys | Captured words on their way to `mem_data` |
 
 The multi-bit values (group, subsampling, length, offset, memory level) cross through a plain
 `MultiReg`, without Gray coding. The control values are written before the capture is armed and
 stay constant during it. The memory level changes while the capture runs: read it once the
-capture is done, as the driver does. The read path, in `sys`, also uses `storage_enable` directly,
-without crossing: the read path pops words while it is 0.
+capture is done. The arming does not cross as a level: each rising edge of `storage_enable`
+toggles a request bit in `sys`, which crosses to `scope` and comes back as an acknowledge. A toggle
+crosses even when `storage_enable` is 0 for fewer cycles than the scope clock needs to see it. The
+read path, in `sys`, also uses `storage_enable` directly, without crossing: the read path pops
+words while it is 0.
 
 With `clock_domain="sys"`, both domains share one clock and the crossings only add a few cycles
 of delay. A fast domain, such as the clock of a transceiver, puts the comparator and the memory
@@ -147,15 +151,15 @@ Not to scale.](arch_capture.svg)
 2. **Load terms**: for each term, write `trigger_mem_mask` and `trigger_mem_value`, then
    `trigger_mem_write`. Once a term is loaded, `hit` goes low.
 3. **Arm storage**: write `storage_offset` and `storage_length`, then 0 and 1 to
-   `storage_enable`. The rising edge starts the flush of the memory.
-4. **Arm trigger**: write 1 to `trigger_enable`. The trigger compares samples from now on. With
-   fast register writes, this happens before the flush ends, a case described in [Limitation:
-   match during the flush](#stor-flush).
+   `storage_enable`. The rising edge starts the flush of the memory, and `storage_done` reads 0
+   from this write on.
+4. **Arm trigger**: write 1 to `trigger_enable`. The trigger compares the samples that reach it,
+   from the end of the flush on, even when this write arrives before the flush ends ([Flush and
+   arming](#stor-flush)).
 5. **Pre-trigger**: the storage keeps the last `offset` words while it waits for `hit`.
 6. **Post-trigger**: after the match, the storage fills up to `length` words and returns to idle.
-7. **Done and upload**: `wait_done()` polls `storage_done`; `upload()` reads `storage_mem_level`,
-   then that many words from `storage_mem_data`, four fewer than the capture length
-   ([Upload](#stor-upload)).
+7. **Done and upload**: `wait_done()` polls `storage_done`; `upload()` reads the length given to
+   `run()` in words from `storage_mem_data` ([Upload](#stor-upload)).
 
 The trigger steps are described in [Trigger](#trigger) and the storage steps in [Storage and
 read-back](#storage). The driver, its options and the dumps it writes are described in [Host

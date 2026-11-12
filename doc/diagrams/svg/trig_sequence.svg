@@ -17,7 +17,7 @@
 <polyline points="130,38 130,18 160,18 160,38 190,38 190,18 220,18 220,38 250,38 250,18 280,18 280,38 310,38 310,18 340,18 340,38 370,38 370,18 400,18 400,38 430,38 430,18 460,18 460,38 490,38 490,18 520,18 520,38 550,38 550,18 580,18 580,38 610,38 610,18 640,18 640,38 670,38 670,18 700,18 700,38 730,38" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
 <polyline points="130,54 250,54 250,74 430,74 430,54 610,54 610,74 730,74" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
 <polyline points="490,100 730,100" fill="none" stroke="#d0d0d0" stroke-width="1.0"/>
-<polyline points="130,146 490,146 490,126 730,126" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
+<polyline points="130,146 430,146 430,126 730,126" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
 <g fill="#fafafa" stroke="#5b5b5b" stroke-width="0.9" stroke-linejoin="round">
 <rect x="132" y="88" width="176" height="24" rx="0" ry="0"/>
 </g>
@@ -31,6 +31,5 @@
 <text x="118" y="100" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="end" dominant-baseline="central"><tspan x="118" dy="0">term compared</tspan></text>
 <text x="118" y="136" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="13" fill="#000000" text-anchor="end" dominant-baseline="central"><tspan x="118" dy="0">hit</tspan></text>
 <text x="280" y="168.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#5b5b5b" text-anchor="middle" dominant-baseline="central"><tspan x="280" dy="0">term 1</tspan><tspan x="280" dy="14.4">match</tspan></text>
-<text x="460" y="168.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#5b5b5b" text-anchor="middle" dominant-baseline="central"><tspan x="460" dy="0">term 2</tspan><tspan x="460" dy="14.4">match</tspan></text>
-<text x="520" y="168.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#5b5b5b" text-anchor="middle" dominant-baseline="central"><tspan x="520" dy="0">first hit</tspan><tspan x="520" dy="14.4">sample</tspan></text>
+<text x="460" y="168.8" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#5b5b5b" text-anchor="middle" dominant-baseline="central"><tspan x="460" dy="0">term 2 match:</tspan><tspan x="460" dy="14.4">trigger sample</tspan></text>
 </svg>

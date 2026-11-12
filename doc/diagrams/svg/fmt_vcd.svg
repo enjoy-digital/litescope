@@ -15,10 +15,10 @@
 </defs>
 <rect width="100%" height="100%" fill="#ffffff"/>
 <polyline points="170,157 240,157 240,173 310,173 310,157 380,157 380,173 450,173 450,157 520,157 520,173 590,173 590,157 660,157 660,173 730,173" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
-<polyline points="170,218 310,218 310,202 730,202" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
-<polyline points="170,255 310,255" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)" marker-start="url(#arrow-ctrl-rev)"/>
-<text x="240" y="262" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="240" dy="0">offset = 2 steps</tspan></text>
-<polyline points="310,222 310,245" fill="none" stroke="#9a9a9a" stroke-width="1.0" stroke-dasharray="2,3"/>
+<polyline points="170,218 450,218 450,202 730,202" fill="none" stroke="#5b5b5b" stroke-width="1.0"/>
+<polyline points="170,255 450,255" fill="none" stroke="#5b5b5b" stroke-width="1.0" marker-end="url(#arrow-ctrl)" marker-start="url(#arrow-ctrl-rev)"/>
+<text x="310" y="262" font-family="Carlito, Calibri, &#x27;Liberation Sans&#x27;, Arial, sans-serif" font-size="12" fill="#000000" text-anchor="middle" dominant-baseline="central"><tspan x="310" dy="0">offset = 2 samples</tspan></text>
+<polyline points="450,222 450,245" fill="none" stroke="#9a9a9a" stroke-width="1.0" stroke-dasharray="2,3"/>
 <g fill="#e6f5fb" stroke="#5b5b5b" stroke-width="0.9" stroke-linejoin="round">
 <rect x="170" y="17" width="140" height="26" rx="0" ry="0"/>
 </g>

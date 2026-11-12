@@ -41,7 +41,7 @@ Bank `analyzer`.
 
 | Register | Offset | Bits | Access | Description |
 |----------------------------|-------------|--------|---------|----------------------------------------|
-| `mux_value` | `0x0000` | 2 | rw | Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group. Reset `0x0`. |
+| `mux_value` | `0x0000` | 2 | rw | Group to capture, `bits_for(ngroups)` bits; the trigger compares the samples of this group. A value that is no group selects group 0. Reset `0x0`. |
 | `trigger_enable` | `0x0004` | 1 | rw | 1: arm the trigger, a term is consumed on each match. The falling edge flushes the terms left in the term memory. Reset `0x0`. |
 | `trigger_done` | `0x0008` | 1 | ro | 1: term memory empty, every term matched or flushed (also 1 with no term loaded). |
 | `trigger_mem_` `write` | `0x000c` | 1 | wo | Write: push the term (`trigger_mem_mask`, `trigger_mem_value`) into the term memory. |
@@ -51,9 +51,9 @@ Bank `analyzer`.
 | `subsampler_` `value` | `0x0024` | 16 | rw | Subsampling factor minus one: one sample is kept every `value + 1` cycles, `subsampler_width` bits. Reset `0x0`. |
 | `rle_enable` | `0x0028` | 1 | rw | 1: run-length encode the samples from the trigger on. Only with `with_rle=True`. Reset `0x0`. |
 | `storage_enable` | `0x002c` | 1 | rw | Rising edge: flush the storage and start a capture. Keep at 1 while reading `storage_mem_data`. Reset `0x0`. |
-| `storage_done` | `0x0030` | 1 | ro | 1: storage idle, capture complete or never started. |
+| `storage_done` | `0x0030` | 1 | ro | 1: storage idle, capture complete or never started. Reads 0 from the rising edge of `storage_enable` on. |
 | `storage_length` | `0x0034` | 11 | rw | Words of the capture, pre-trigger window included, `bits_for(depth)` bits; at most `depth`. Reset `0x0`. |
-| `storage_offset` | `0x0038` | 11 | rw | Pre-trigger window in words, `bits_for(depth)` bits; below `depth`. Reset `0x0`. |
+| `storage_offset` | `0x0038` | 11 | rw | Pre-trigger window in words, `bits_for(depth)` bits; below `storage_length`. The trigger sample is at index `offset` of the capture. Reset `0x0`. |
 | `storage_mem_` `level` | `0x003c` | 11 | ro | Words still in the storage memory, `bits_for(depth)` bits; read it once `storage_done` is 1. The last words of a capture, up to four, have then moved to the read path and are not counted. |
 | `storage_mem_` `data` | `0x0040` | 32 | ro | Read port: next 32-bit sub-word of the capture, least significant first; each read pops it. |
 

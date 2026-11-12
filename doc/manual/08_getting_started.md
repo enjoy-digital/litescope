@@ -47,9 +47,9 @@ domain ([The simulated SoC of LiteX](#ex-litex-sim)).
 
 The host needs a bridge to reach the registers of the analyzer. `--uart-name=crossover+uartbone`
 turns the simulated serial port into a UARTBone bridge and moves the console of the BIOS to a
-crossover UART, which the host reads through the same bridge. `--uart-tcp` exposes the serial
-port on a TCP port; `--uart-pty` also links a virtual serial device of the host to it, through a
-`socat` process.
+crossover UART, which the host reads through the same bridge. `--uart-pty` exposes the serial
+port on a TCP port and links a virtual serial device of the host to it, through a `socat` process
+that `litex_sim` starts with the simulation and stops when the simulation exits.
 
 ## Step 1: generate `analyzer.csv` {#gs-elaborate}
 
@@ -59,13 +59,13 @@ in an empty directory, the working directory of every later step.
 
 ```sh
 mkdir sim && cd sim
-litex_sim --with-analyzer --uart-name=crossover+uartbone --uart-tcp \
-    --uart-tcp-port 2345 --csr-csv csr.csv --no-compile
+litex_sim --with-analyzer --uart-name=crossover+uartbone --uart-pty \
+    --uart-pty-path $PWD/pty0 --uart-tcp-port 2345 --csr-csv csr.csv --no-compile
 ```
 
-This step uses `--uart-tcp` rather than `--uart-pty`: `litex_sim` starts its `socat` process even
-with `--no-compile` and does not stop it, and a `socat` left from this step would compete with the
-one of step 2 for the bridge. Both options give the same `analyzer.csv` and `csr.csv`.
+With `--no-compile`, `litex_sim` starts no simulation and no `socat` process. `--uart-pty-path`
+takes an absolute path: `litex_sim` starts `socat` from the build directory of the simulation
+(`build/sim/gateware`), where a relative path such as `./pty0` would create the link.
 
 `--uart-tcp-port 2345` moves the TCP port of the simulated serial port away from 1234, the
 default port of `litex_server`; with both on 1234, `litex_server` cannot start. `--csr-csv
@@ -80,7 +80,7 @@ the start and the end of the generated `analyzer.csv`:
 config,None,data_width,204
 config,None,storage_width,204
 config,None,depth,512
-config,None,samplerate,1000000000000
+config,None,samplerate,1000000
 config,None,subsampler_width,16
 config,None,with_rle,0
 config,None,rle_length,256
@@ -91,23 +91,23 @@ signal,0,simsoc_ibus_adr,30
 signal,0,simsoc_dbus_dat_r,32
 ```
 
-A sample is 204 bits, the sum of the widths of the 16 probes. The sample rate is the default of
-the analyzer, a placeholder: `litex_sim` does not pass the frequency of its clock, which shows
-when the dump is opened (step 7). [Capture files](#fmt-analyzer-csv) describes every row.
+A sample is 204 bits, the sum of the widths of the 16 probes. The sample rate is the 1 MHz of the
+system clock, which `litex_sim` passes to the analyzer: the dumps get a real time axis (step 7).
+[Capture files](#fmt-analyzer-csv) describes every row.
 
 ## Step 2: run the simulation {#gs-sim}
 
-Run the command again in a first terminal, with `--uart-pty --uart-pty-path ./pty0` in place of
-`--uart-tcp` and without `--no-compile`. `--non-interactive` keeps the terminal out of the
-simulation; the console of the BIOS is on the crossover UART anyway.
+Run the command again in a first terminal, without `--no-compile`. `--non-interactive` keeps the
+terminal out of the simulation; the console of the BIOS is on the crossover UART anyway.
 
 ```sh
 litex_sim --with-analyzer --uart-name=crossover+uartbone --uart-pty \
-    --uart-pty-path ./pty0 --uart-tcp-port 2345 --csr-csv csr.csv --non-interactive
+    --uart-pty-path $PWD/pty0 --uart-tcp-port 2345 --csr-csv csr.csv --non-interactive
 ```
 
 **What you should see.** LiteX compiles the BIOS, then Verilator compiles the SoC, which takes a
-while the first time. The simulation then starts and `./pty0` appears: a link to the virtual
+while the first time. The simulation then starts, `litex_sim` prints `[litex_sim] UART PTY
+created at:` followed by the path, and `pty0` appears in the directory: a link to the virtual
 serial device that carries the bridge.
 
 ## Step 3: start `litex_server` {#gs-server}
@@ -187,13 +187,12 @@ waits for the CPU to put `0x12345678` on the write data of its data bus. Arm it 
 ```console
 $ litescope_cli -v simsoc_dbus_dat_w 0x12345678 --dump value.vcd
 Exact: simsoc_dbus_dat_w
-Exact: simsoc_dbus_dat_w
 Condition: simsoc_dbus_dat_w == 0x12345678
 analyzer: run (offset=32, length=512)
 analyzer: wait_done (delay=0.2s)
 ```
 
-Each lookup of a name prints an `Exact:` line; `-v` looks its name up twice ([Signal
+The lookup of a name prints an `Exact:` line when the name matches a probe exactly ([Signal
 names](#host-cli-names)).
 
 Then make the CPU write that value. The BIOS command `mem_write` writes a word at an address,
@@ -208,20 +207,19 @@ The CLI was waiting at `wait_done`. The write fires the trigger, and the CLI upl
 and writes the dump:
 
 ```console
-analyzer: upload (words=508)
+analyzer: upload (words=512)
 analyzer: [====================] 100%
 analyzer: write value.vcd
 ```
 
 The `run` line shows the defaults of the CLI: 32 samples before the trigger, and a capture as long
-as the depth. The upload reads 508 of the 512 captured words; [Upload](#stor-upload) explains
-the missing ones. The upload is slow in simulation, where the serial bridge runs at the speed of
-the simulated clock.
+as the depth. The upload reads the 512 words of the capture. It is slow in simulation, where the
+serial bridge runs at the speed of the simulated clock.
 
-**What the capture holds.** The matching write is sample 30, two samples before the 32 of
-`--offset` ([Trigger position in the capture](#trig-position)). It is not the write to the
-scratch register: it is the BIOS saving the parsed value on its stack, in the SRAM. The scratch
-register write comes about 200 samples later.
+**What the capture holds.** The matching write is sample 32, the `--offset` of the run ([Trigger
+position in the capture](#trig-position)). It is not the write to the scratch register: it is the
+BIOS saving the parsed value on its stack, in the SRAM. The scratch register write comes about
+200 samples later, at sample 229.
 
 The data bus carries word addresses: the stack write shows `0x40007af`, which is the byte
 address `0x10001ebc`.
@@ -234,20 +232,18 @@ add a condition on the address: several `-v` options are ANDed into one term. Th
 $ litescope_cli -v simsoc_dbus_dat_w 0x12345678 -v simsoc_dbus_adr 0x3c000201 \
     --dump value_adr.vcd
 Exact: simsoc_dbus_dat_w
-Exact: simsoc_dbus_dat_w
 Condition: simsoc_dbus_dat_w == 0x12345678
-Exact: simsoc_dbus_adr
 Exact: simsoc_dbus_adr
 Condition: simsoc_dbus_adr == 0x3c000201
 analyzer: run (offset=32, length=512)
 analyzer: wait_done (delay=0.2s)
-analyzer: upload (words=508)
+analyzer: upload (words=512)
 analyzer: [====================] 100%
 analyzer: write value_adr.vcd
 ```
 
-With the same `mem_write` in the console, the capture now holds the register write at samples 30
-to 32. The cycle, strobe and write enable lines are high on the three samples, and the
+With the same `mem_write` in the console, the capture now holds the register write at samples 32
+to 34. The cycle, strobe and write enable lines are high on the three samples, and the
 acknowledge of the bus comes on the third. Values take a `0b` or `0x` prefix, and `x` digits are
 don't care bits or nibbles ([Value strings](#trig-values)).
 
@@ -274,12 +270,12 @@ The figure below is drawn from `rising.vcd`, around the trigger. Bus values are 
 and addresses are word addresses.
 
 ![A real capture: the rising edge of ibus_stb, drawn from the dump of litescope_cli -r
-simsoc_ibus_stb. The strobe rises at sample 30, where the trigger fires; the CPU then reads eight
+simsoc_ibus_stb. The strobe rises at sample 32, where the trigger fires; the CPU then reads eight
 consecutive words, one acknowledge every other cycle, to refill one line of its instruction cache.
 The read data is shaded until the first acknowledge. Probe names are shown without their
 `simsoc_` prefix.](gs_capture.svg)
 
-The strobe and the cycle line rise together at sample 30 and stay high for the whole refill. The
+The strobe and the cycle line rise together at sample 32 and stay high for the whole refill. The
 address starts at `0x6b0` and moves to the next word after each acknowledge, and the read data
 changes with each acknowledge. After eight words the cycle line falls, and the CPU runs from the
 cache again.
@@ -297,9 +293,9 @@ The start of the file shows its layout: one variable per probe, then `scope_clk`
 
 ```text
 $date
-	2026-11-11 12:56
+	2026-11-12 11:32
 $end
-$timescale 0ps $end
+$timescale 500000ps $end
 $scope module top $end
 $var wire 1 ! simsoc_ibus_stb $end
 $var wire 1 " simsoc_ibus_cyc $end
@@ -312,15 +308,13 @@ $upscope  $end
 $enddefinitions  $end
 ```
 
-`$timescale 0ps` comes from the placeholder sample rate of step 1. The order of the samples is
-right but the time axis is not ([Wrong time scale](#debug-timescale)). Count samples instead of
-reading times: each sample takes two time steps, one with `scope_clk` high and one with it low
-([What every dump contains](#fmt-common)).
+The time unit is half a sample period: each sample takes two time steps, one with `scope_clk`
+high and one with it low ([What every dump contains](#fmt-common)). With the 1 MHz of step 1, a
+step is 500000 ps and a sample 1 µs, the period of the simulated clock.
 
-Do not use `scope_trig` to find the trigger in these dumps: it rises at sample 16, half of
-`--offset`, while the match is at sample 30. Look for the matching value in the data, as the
-figure of step 6 does. `--dump` with a `.sr`, `.csv`, `.json` or `.py` name writes the other
-formats ([Capture files](#file-formats)).
+`scope_trig` rises at the trigger sample, sample 32 in the three dumps: in GTKWave, it marks where
+the matching value or the edge is. `--dump` with a `.sr`, `.csv`, `.json` or `.py` name writes the
+other formats ([Capture files](#file-formats)).
 
 ## On a board {#gs-board}
 
@@ -343,8 +337,8 @@ Connect the Ethernet port of the board to the host, and give the host an address
 subnet, such as 192.168.1.100. `litescope_cli` without a trigger option captures at once, which
 checks the whole chain before the first real trigger.
 
-**What to look for.** `litescope_cli --list` prints the names of your build, which differ from
-the names in the comments of `examples/arty.py`. A capture ends with `write dump.vcd`. The
+**What to look for.** `litescope_cli --list` prints the names of your build, which can differ
+from the names in the comments of `examples/arty.py`. A capture ends with `write dump.vcd`. The
 counter probe counts the cycles of the `sys` clock, so it increments by one on each sample.
 This analyzer passes `samplerate`, so its dumps have a real time axis.
 
@@ -361,8 +355,10 @@ bridge to any LiteX target.
 - **The CLI stays at `wait_done`**: the event did not happen after the trigger was armed. Check
   the value and the signal name, and use `--timeout` in scripts ([The capture never
   triggers](#debug-no-trigger)).
-- **The dump has no usable time axis**: the analyzer was built without `samplerate` ([Wrong time
-  scale](#debug-timescale)).
+- **The time axis of the dump is wrong**: the analyzer was built without `samplerate`, or with
+  the rate of another clock ([Wrong time scale](#debug-timescale)).
+- **`./pty0` does not appear in the directory**: give `--uart-pty-path` an absolute path, as in
+  step 1; a relative path is created in `build/sim/gateware`.
 
 ## Where to go next {#gs-next}
 
