@@ -268,6 +268,25 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("Trigger did not fire", out)
 
+    def test_json_argument_error(self):
+        # With --json, a command-line error is a JSON error with exit code 1 (exit code 2 is the
+        # trigger timeout); without --json, argparse reports it (usage, exit code 2).
+        import json
+        for extra in [["--bogus"], ["--group", "x"], ["-v", "flag"]]:
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with mock.patch.object(sys, "argv", ["litescope_cli", "--json"] + extra), \
+                 mock.patch("sys.stdout", stdout), mock.patch("sys.stderr", stderr):
+                with self.assertRaises(SystemExit) as cm:
+                    litescope_cli.parse_args()
+            self.assertEqual(cm.exception.code, 1, msg=extra)
+            self.assertIn("ArgumentError", json.loads(stdout.getvalue())["error"])
+        with mock.patch.object(sys, "argv", ["litescope_cli", "--bogus"]), \
+             mock.patch("sys.stderr", io.StringIO()):
+            with self.assertRaises(SystemExit) as cm:
+                litescope_cli.parse_args()
+        self.assertEqual(cm.exception.code, 2)
+
     def test_json_error(self):
         import json
         with tempfile.TemporaryDirectory() as tmpdir:

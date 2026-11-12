@@ -357,6 +357,26 @@ class TestAnalyzerDriver(unittest.TestCase):
 
         self.assertEqual(regs.d["analyzer_subsampler_value"].writes, [])
 
+    def test_ambiguous_signal_warning_on_stderr(self):
+        # The warning must not go to stdout (litescope_cli --json prints one JSON object there).
+        import io
+        from unittest import mock
+        self.tmpdir = tempfile.TemporaryDirectory()
+        config_csv  = os.path.join(self.tmpdir.name, "analyzer.csv")
+        with open(config_csv, "w") as f:
+            f.write("config,None,data_width,8\n")
+            f.write("config,None,depth,16\n")
+            f.write("config,None,samplerate,100000000\n")
+            f.write("signal,0,flag,1\n")
+            f.write("signal,0,shared,3\n")
+            f.write("signal,1,shared,3\n")
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with mock.patch("sys.stdout", stdout), mock.patch("sys.stderr", stderr):
+            LiteScopeAnalyzerDriver(make_regs(), "analyzer", config_csv=config_csv)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("warning: signal 'shared'", stderr.getvalue())
+
     def test_upload_packs_32bit_subwords(self):
         mem_data = [
             0x00000001, 0x00000002,
