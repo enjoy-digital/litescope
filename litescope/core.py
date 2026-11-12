@@ -291,6 +291,7 @@ class _Mux(LiteXModule):
 class _Storage(LiteXModule):
     def __init__(self, data_width, depth):
         self.sink = sink = stream.Endpoint(core_layout(data_width))
+        self.armed    = Signal()
         self.post_hit = Signal()
         self.flush = Signal()
 
@@ -370,6 +371,7 @@ class _Storage(LiteXModule):
         # trigger sample.
         pre_count = Signal().like(mem.level)
         fsm.act("WAIT",
+            self.armed.eq(1),
             sink.connect(mem.sink, omit={"hit"}),
             mem.source.ready.eq(mem.level > offset),
             NextValue(pre_count, mem.level - (mem.source.valid & mem.source.ready)),
@@ -378,6 +380,7 @@ class _Storage(LiteXModule):
             )
         )
         fsm.act("RUN",
+            self.armed.eq(1),
             self.post_hit.eq(1),
             mem.source.ready.eq(pre_count > offset),
             If(mem.source.valid & mem.source.ready,
@@ -476,8 +479,14 @@ class LiteScopeAnalyzer(LiteXModule):
 
         # Pipeline: Mux -> Trigger -> Subsampler -> Storage.
         # --------------------------------------------------
+        # The trigger only sees samples once the storage is armed (WAIT/RUN): a match during the
+        # FLUSH of the storage (trigger armed by fast register writes) would otherwise consume
+        # the terms and start the capture at the end of FLUSH, without the matching sample.
+        self.comb += [
+            self.mux.source.connect(self.trigger.sink, omit={"valid"}),
+            self.trigger.sink.valid.eq(self.mux.source.valid & self.storage.armed),
+        ]
         pipeline = [
-            self.mux,
             self.trigger,
             self.subsampler,
         ]
