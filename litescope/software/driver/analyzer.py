@@ -66,6 +66,7 @@ class LiteScopeAnalyzerDriver:
         self.build()
         self.group = 0
         self.rle_enabled = False
+        self.subsampling = 1
         self.data = DumpData(self.data_width)
 
         self.offset = 0
@@ -160,7 +161,7 @@ class LiteScopeAnalyzerDriver:
         return self.signal_masks[(self.group, name)]
 
     def configure_group(self, value):
-        # The gateware mux has no default case: an unknown group would stall the capture.
+        # An unknown group selects group 0 in the gateware: the capture would not match the layout.
         if value not in self.layouts:
             raise ValueError("Group {} not in analyzer groups {}".format(value, sorted(self.layouts)))
         self.group = value
@@ -203,8 +204,8 @@ class LiteScopeAnalyzerDriver:
         # Disarm the trigger; the gateware flushes any leftover terms (previous capture,
         # aborted sequence) on the falling edge of enable.
         self.trigger_enable.write(0)
-        # The flush window is 2*trigger_depth scope cycles; any CSR access takes far longer,
-        # but poll done (trigger memory empty) so the reload below cannot race the flush.
+        # The flush lasts until the term memory is empty: poll done (trigger memory empty) so
+        # that the reload below cannot race the flush.
         deadline = time.time() + timeout
         for _ in range(2):
             while not self.trigger_done.read():

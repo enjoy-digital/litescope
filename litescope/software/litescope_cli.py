@@ -74,13 +74,13 @@ def add_triggers(args, analyzer, signals, verbose=True):
         added = True
     for signal in args.falling_edge or []:
         name = finder[signal]
-        analyzer.add_falling_edge_trigger(finder[signal])
+        analyzer.add_falling_edge_trigger(name)
         log(f"Falling edge: {name}")
         added = True
     cond = {}
     for signal, value in args.value_trigger or []:
         name = finder[signal]
-        cond[finder[signal]] = value
+        cond[name] = value
         log(f"Condition: {name} == {value}")
     if cond:
         analyzer.add_trigger(cond=cond)
@@ -89,6 +89,13 @@ def add_triggers(args, analyzer, signals, verbose=True):
 
 # Run Batch/GUI  -----------------------------------------------------------------------------------
 
+def get_name(args):
+    # Name of the analyzer in the SoC (prefix of its registers): --name, else the --csv basename.
+    name = getattr(args, "name", None)
+    if name is None:
+        name = os.path.splitext(os.path.basename(args.csv))[0]
+    return name
+
 def run_batch(args):
     json_output = getattr(args, "json",    False)
     timeout     = getattr(args, "timeout", None)
@@ -96,7 +103,7 @@ def run_batch(args):
     bus = RemoteClient(host=args.host, port=args.port, csr_csv=args.csr_csv, raise_on_timeout=True)
     bus.open()
 
-    basename = os.path.splitext(os.path.basename(args.csv))[0]
+    basename = get_name(args)
     signals  = get_signals(args.csv, args.group)
     result   = {"schema": 1, "group": args.group, "triggered": False}
 
@@ -146,8 +153,7 @@ def run_gui(args):
     triggers = get_signals(args.csv, args.group)
 
     def capture_callback():
-        basename = os.path.splitext(os.path.basename(args.csv))[0]
-        analyzer = LiteScopeAnalyzerDriver(bus.regs, basename, config_csv=args.csv, debug=True)
+        analyzer = LiteScopeAnalyzerDriver(bus.regs, get_name(args), config_csv=args.csv, debug=True)
         analyzer.configure_group(int(dpg.get_value(item="capture_group"), 0))
         analyzer.configure_subsampler(int(dpg.get_value(item="capture_subsampling"), 0))
         analyzer.configure_rle(dpg.get_value(item="capture_rle"))
@@ -155,9 +161,10 @@ def run_gui(args):
         for trigger in triggers:
             trigger_cond[trigger] = dpg.get_value(trigger)
         analyzer.add_trigger(cond=trigger_cond)
+        length = dpg.get_value(item="capture_length")
         analyzer.run(
             offset = int(dpg.get_value(item="capture_offset"), 0),
-            length = int(dpg.get_value(item="capture_length"), 0),
+            length = int(length, 0) if length else None,
         )
         dpg.set_value("capture_status", "Running...")
         analyzer.wait_done()
@@ -174,9 +181,11 @@ def run_gui(args):
     with dpg.window(label="Capture", autosize=True):
         dpg.add_text("Parameters")
         dpg.add_input_text(indent=8, label="Offset",      tag="capture_offset",      default_value=args.offset)
-        dpg.add_input_text(indent=8, label="Length",      tag="capture_length",      default_value="128") # FIXME
-        dpg.add_input_text(indent=8, label="Group",       tag="capture_group",       default_value="0")   # FIXME
-        dpg.add_input_text(indent=8, label="Subsampling", tag="capture_subsampling", default_value="1")   # FIXME
+        # Length: empty for the analyzer depth. Group: read-only, the trigger fields are resolved
+        # for --group.
+        dpg.add_input_text(indent=8, label="Length",      tag="capture_length",      default_value=args.length or "")
+        dpg.add_input_text(indent=8, label="Group",       tag="capture_group",       default_value=str(args.group), readonly=True)
+        dpg.add_input_text(indent=8, label="Subsampling", tag="capture_subsampling", default_value=str(args.subsampling))
         dpg.add_checkbox(  indent=8, label="RLE",         tag="capture_rle",         default_value=args.rle)
         dpg.add_input_text(indent=8, label="Dump",        tag="capture_dump",        default_value=args.dump)
         dpg.add_text("Control/Status")
@@ -223,6 +232,7 @@ def parse_args():
     parser.add_argument("--port",                default="1234",           help="Host bind port.")
     parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file.")
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
+    parser.add_argument("--name",                default=None,             help="Analyzer name in the SoC (register prefix); default is the --csv basename.")
     parser.add_argument("--group",               default=0, type=int,      help="Capture group to use from analyzer.csv.")
     parser.add_argument("--subsampling",         default=1, type=int,      help="Keep one sample every N scope clock cycles.")
     parser.add_argument("--rle",                 action="store_true",      help="Enable analyzer run-length encoding.")
@@ -248,7 +258,6 @@ def _run(args):
     if not os.path.exists(args.csv):
         raise ValueError("{} not found. This is necessary to load the wires which have been tapped to scope."
                          "Try setting --csv to value of the csr_csv argument to LiteScopeAnalyzer in the SoC.".format(args.csv))
-        sys.exit(1)
 
     # If in list mode, list signals and exit.
     if args.list:

@@ -12,8 +12,9 @@
 # litescope_cli: will trigger an immediate capture!
 # litescope_cli --help: list the available trigger option.
 # litescope_cli --list: list the signals that can be used as triggers.
-# litescope_cli -v main_count 128: trigger on count value == 128.
-# litescope_cli -r litescopesoc_cpu_ibus_stb: trigger in ibus_stb rising edge
+# litescope_cli -v main_count1 128: trigger on count value == 128.
+# litescope_cli -r main_litescopesoc_ibus_stb: trigger on ibus_stb rising edge.
+# (Signal names as given by litescope_cli --list; they depend on the LiteX version.)
 # For more information: https://github.com/enjoy-digital/litex/wiki/Use-LiteScope-To-Debug-A-SoC
 
 import os

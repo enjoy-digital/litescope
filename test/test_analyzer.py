@@ -190,6 +190,51 @@ class TestAnalyzer(unittest.TestCase):
         self.assertEqual(dut.data[0], 0xb0)
         self.assertEqual(dut.data, [(0xb0 + 3*i) & 0xff for i in range(len(dut.data))])
 
+    def test_analyzer_group_mux_default(self):
+        # A mux value that is not a group (raw register write) selects group 0: the capture
+        # completes instead of stalling.
+        def generator(dut):
+            yield from dut.analyzer.mux.value.write(dut.mux_value)
+            yield from dut.analyzer.trigger.mem_value.write(0)
+            yield from dut.analyzer.trigger.mem_mask.write(0)
+            yield from dut.analyzer.trigger.mem_write.write(1)
+            yield from dut.analyzer.subsampler.value.write(0)
+            yield from dut.analyzer.storage.length.write(16)
+            yield from dut.analyzer.storage.offset.write(0)
+            yield from dut.analyzer.storage.enable.write(1)
+            yield from dut.analyzer.trigger.enable.write(1)
+            for i in range(16):
+                yield
+            for i in range(1000):
+                if (yield from dut.analyzer.storage.done.read()):
+                    break
+                yield
+            else:
+                return
+            dut.data = (yield from read_capture_words(dut.analyzer, 16))
+
+        class DUT(Module):
+            def __init__(self, mux_value):
+                self.mux_value = mux_value
+                self.data      = None
+                counter = Signal(8)
+                other   = Signal(8, reset=0x80)
+                self.sync += [
+                    counter.eq(counter + 1),
+                    other.eq(other - 1),
+                ]
+                self.submodules.analyzer = LiteScopeAnalyzer({
+                    0: counter,
+                    1: other,
+                }, 32, csr_csv=None)
+
+        for mux_value in [2, 3]:
+            dut = DUT(mux_value)
+            run_simulation(dut, {"sys" : [generator(dut)]}, {"sys": 10, "scope": 10})
+            self.assertIsNotNone(dut.data, msg=f"mux_value={mux_value}")
+            # Group 0 (incrementing counter).
+            self.assertEqual(dut.data, [(dut.data[0] + i) & 0xff for i in range(16)])
+
     def test_analyzer_raw_msb_data_without_rle(self):
         def generator(dut):
             yield from dut.analyzer.trigger.mem_value.write(0)
