@@ -94,7 +94,8 @@ sample.](fmt_vcd.svg)
 `scope_trig` is 0 for the first `2 x offset` time steps and 1 after, where `offset` is the
 pre-trigger length given to `run()`. The marker thus rises at sample `offset`, the trigger sample
 ([Trigger position in the capture](#trig-position)). With the CLI default `--offset 32`, it rises
-at sample 32.
+at sample 32. In a dump with `offset` samples or fewer, such as an upload cut by `max_samples`, the
+marker stays at 0 and adds no time step.
 
 The time scale comes from the `samplerate` of `analyzer.csv`, divided by the subsampling factor.
 `save(filename, samplerate=...)` replaces this value, and is used as given, without the

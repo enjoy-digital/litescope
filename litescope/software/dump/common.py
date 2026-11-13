@@ -114,7 +114,10 @@ class Dump:
 
     def add_scope_trig(self, offset):
         # Offset is a sample index: each sample is written twice (one scope_clk period).
-        self.add(DumpVariable("scope_trig", 1, [0]*(2*offset) + [1]*(len(self)-2*offset)))
+        # The marker never gets longer than the dump (offset past the last sample: stays at 0).
+        length = len(self)
+        offset = min(2*offset, length)
+        self.add(DumpVariable("scope_trig", 1, [0]*offset + [1]*(length - offset)))
 
     def __len__(self):
         l = 0
