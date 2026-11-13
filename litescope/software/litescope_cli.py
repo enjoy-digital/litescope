@@ -230,7 +230,7 @@ def parse_args():
     parser.add_argument("-l", "--list",          action="store_true",      help="List signal choices.")
     parser.add_argument("--host",                default="localhost",      help="Host ip address")
     parser.add_argument("--port",                default="1234",           help="Host bind port.")
-    parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file.")
+    parser.add_argument("--csv",                 default="analyzer.csv",   help="Analyzer CSV file (csr_csv of LiteScopeAnalyzer, written in the directory the build was run from).")
     parser.add_argument("--csr-csv",             default="csr.csv",        help="SoC CSV file.")
     parser.add_argument("--name",                default=None,             help="Analyzer name in the SoC (register prefix); default is the --csv basename.")
     parser.add_argument("--group",               default=0, type=int,      help="Capture group to use from analyzer.csv.")
@@ -256,8 +256,10 @@ def _run(args):
 
     # Check if analyzer file is present and exit if not.
     if not os.path.exists(args.csv):
-        raise ValueError("{} not found. This is necessary to load the wires which have been tapped to scope."
-                         "Try setting --csv to value of the csr_csv argument to LiteScopeAnalyzer in the SoC.".format(args.csv))
+        raise ValueError("{} not found. This is necessary to load the wires which have been tapped to scope. "
+                         "Try setting --csv to value of the csr_csv argument to LiteScopeAnalyzer in the SoC "
+                         "(a relative path is written in the directory the build was run from, not in the build "
+                         "output directory).".format(args.csv))
 
     # If in list mode, list signals and exit.
     if args.list:

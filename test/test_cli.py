@@ -263,6 +263,25 @@ class TestCLI(unittest.TestCase):
                 litescope_cli.main()
         return cm.exception.code, stdout.getvalue()
 
+    def test_missing_analyzer_csv(self):
+        # The error says where the analyzer writes its file (the directory the build was run
+        # from), --help too.
+        import json
+        with tempfile.TemporaryDirectory() as tmpdir:
+            missing = os.path.join(tmpdir, "missing.csv")
+            with self.assertRaisesRegex(ValueError, r"missing\.csv not found\. .* scope\. Try setting --csv .*"
+                r"directory the build was run from"):
+                self._run_main(tmpdir, "--list", "--csv", missing)
+            code, out = self._run_main(tmpdir, "--list", "--json", "--csv", missing)
+        self.assertEqual(code, 1)
+        self.assertIn("directory the build was run from", json.loads(out)["error"])
+
+        stdout = io.StringIO()
+        with mock.patch.object(sys, "argv", ["litescope_cli", "--help"]), mock.patch("sys.stdout", stdout):
+            with self.assertRaises(SystemExit):
+                litescope_cli.parse_args()
+        self.assertIn("directory the build was run from", " ".join(stdout.getvalue().split()))
+
     def test_json_list(self):
         import json
         with tempfile.TemporaryDirectory() as tmpdir:
