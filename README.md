@@ -44,26 +44,13 @@ provided).
 - Exports formats: .vcd, .sr(sigrok), .csv, .py, etc...
 
 [> Documentation
------------------
-The **Embedded Logic Analyzer manual** is the reference of LiteScope: a nightly
-[PDF](https://github.com/enjoy-digital/litescope/releases/download/manual-nightly/litescope_manual.pdf)
-and [HTML page](https://github.com/enjoy-digital/litescope/releases/download/manual-nightly/litescope_manual.html)
-are published on the [manual-nightly](https://github.com/enjoy-digital/litescope/releases/tag/manual-nightly)
-release. Sources in [doc/manual](doc/manual/README.md) (build: `python3 doc/manual/build.py`, outputs in
-`build/doc/`; pandoc, XeLaTeX and the fonts listed in the README of `doc/manual`):
+----------------
+The **Embedded Logic Analyzer manual** is the reference of the project, from the primers to the integration,
+the examples, the debugging and the registers:
 
-- **Understand**: [introduction](doc/manual/01_introduction.md), [embedded logic analysis in a
-  nutshell](doc/manual/02_logic_analysis_primer.md) (probes, triggers, windows, subsampling, RLE).
-- **The core**: [analyzer architecture](doc/manual/03_analyzer_architecture.md), [trigger](doc/manual/04_trigger.md),
-  [subsampler and RLE](doc/manual/05_subsampler_rle.md), [storage](doc/manual/06_storage.md),
-  [IO probe](doc/manual/07_io_probe.md).
-- **Use it**: [getting started](doc/manual/08_getting_started.md), [integration](doc/manual/09_integration.md),
-  [host tools](doc/manual/10_host_tools.md), [capture files](doc/manual/11_file_formats.md),
-  [examples](doc/manual/12_examples.md), [simulation](doc/manual/13_simulation.md),
-  [debugging](doc/manual/14_debugging.md).
-- **Appendices**: [registers](doc/manual/A_registers.md), [build options](doc/manual/B_build_options.md),
-  [glossary](doc/manual/C_glossary.md), [performance and resources](doc/manual/D_performance.md),
-  [maintaining this manual](doc/manual/E_maintenance.md) (for contributors).
+- Read it: [PDF](https://github.com/enjoy-digital/litescope/releases/download/manual-nightly/litescope_manual.pdf) or
+  [HTML](https://github.com/enjoy-digital/litescope/releases/download/manual-nightly/litescope_manual.html) (rebuilt nightly).
+- Sources and local build: [doc/manual](doc/manual/README.md).
 
 [> Run-Length Encoding
 ----------------------
