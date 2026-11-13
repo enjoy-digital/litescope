@@ -180,6 +180,31 @@ class TestDump(unittest.TestCase):
         # scope_trig rises with the trigger sample (index 2).
         self.assertEqual(bus.values[trig.values.index(1)], 0x3)
 
+    def test_scope_trig_does_not_lengthen_dump(self):
+        # An offset past the last sample (upload(max_samples=...) below the offset, flattened
+        # 1-bit probes) keeps the marker at 0 and adds no time step to the dump.
+        for offset in [2, 3, 8]:
+            with self.subTest(offset=offset):
+                data = DumpData(4)
+                data.extend([0x1, 0x2])
+
+                dump = Dump()
+                dump.add_from_layout([("bus", 4)], data)
+                dump.add_scope_clk()
+                dump.add_scope_trig(offset)
+
+                bus, clk, trig = dump.variables
+                self.assertEqual(trig.values, [0, 0, 0, 0])
+                self.assertEqual(len(dump), len(bus))
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    filename = os.path.join(tmpdir, "dump.csv")
+                    CSVDump(dump).write(filename)
+                    with open(filename) as f:
+                        rows = f.read().splitlines()
+                # Two header rows, then one row per time step of the captured samples.
+                self.assertEqual(len(rows), 2 + len(bus))
+
     def test_add_from_layout_flatten(self):
         data = DumpData(4)
         data.extend([0b1010, 0b0101])
